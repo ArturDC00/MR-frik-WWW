@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+
+# Blokuj zasoby deweloperskie
+Disallow: /src/
+Disallow: /.claude/
+Disallow: /node_modules/
+
+# Sitemap
+Sitemap: https://mrfrik.pl/sitemap.xml
+
+# Crawl-delay dla grzecznych botów
+Crawl-delay: 1

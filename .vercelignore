@@ -1,0 +1,7 @@
+node_modules
+.next
+dist
+Archiwum.zip
+*.zip
+*.tar.gz
+.git

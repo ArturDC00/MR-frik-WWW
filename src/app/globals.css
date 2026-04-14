@@ -1,0 +1,167 @@
+/* Inter — self-hosted WOFF2 variable font (GDPR safe, zero external requests) */
+/* latin-ext: Polish diacritics (ą, ę, ó, ź, ż, ń, ć, ś, ł) */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 300 800;
+    font-display: swap;
+    src: url('/fonts/inter-latin-ext.woff2') format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 300 800;
+    font-display: swap;
+    src: url('/fonts/inter-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Monument Extended — self-hosted (brak zależności CDN, zero CLS, GDPR safe) */
+@font-face {
+    font-family: 'Monument Extended';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/MonumentExtended-Regular.woff') format('woff');
+}
+
+@font-face {
+    font-family: 'Monument Extended';
+    font-style: normal;
+    font-weight: 800;
+    font-display: swap;
+    src: url('/fonts/MonumentExtended-Ultrabold.woff') format('woff');
+}
+
+:root {
+    --H1-size: 61px;
+    --H1-line-height: 96px;
+    --H2-size: 39px;
+    --H2-line-height: 64px;
+    --H3-size: 30px;
+    --H3-line-height: 48px;
+    --H4-size: 25px;
+    --H5-size: 20px;
+    --H5-line-height: 32px;
+    --Caption-size: 13px;
+    --Caption-line-height: 24px;
+    --Footnote-size: 10px;
+    --Footnote-line-height: 16px;
+
+    --safe-area-inset-top: env(safe-area-inset-top);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom);
+    --safe-area-inset-left: env(safe-area-inset-left);
+    --safe-area-inset-right: env(safe-area-inset-right);
+}
+
+/* Lenis smooth scroll */
+html.lenis,
+html.lenis body {
+    height: auto;
+}
+
+.lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+    overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+    overflow: hidden;
+}
+
+.lenis.lenis-scrolling iframe {
+    pointer-events: none;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    background: #020203;
+    color: #F5F5F5;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
+}
+
+::selection {
+    background: rgba(253, 151, 49, 0.35);
+    color: #fff;
+}
+
+/* Next.js wraps content in <body> → no #root, but keep for compatibility */
+#__next,
+#root {
+    min-height: 100vh;
+    width: 100%;
+}
+
+@keyframes pulse-dot {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(229, 127, 77, 0.7);
+    }
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 6px rgba(229, 127, 77, 0);
+    }
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(229, 127, 77, 0);
+    }
+}
+
+.pulsing-dot {
+    animation: pulse-dot 2s infinite;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #020203;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* ── Hide ambient sound button on mobile (conflicts with nav FAB) ── */
+@media (max-width: 767px) {
+    .ambient-sound-btn {
+        display: none !important;
+    }
+}
+
+/* ── prefers-reduced-motion: wyłącz wszystkie animacje CSS ── */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
