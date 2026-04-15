@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { ScrollRestorer } from '../../components/UI/ScrollRestorer';
+import { siteUrl, siteHostname } from '../../config/site';
 
 export const metadata = {
     title: 'Polityka Prywatności — MrFrik Import',
     description: 'Polityka prywatności serwisu MrFrik. Informacje o przetwarzaniu danych osobowych przez PF Group Sp. z o.o.',
     robots: { index: true, follow: true },
-    alternates: { canonical: 'https://mrfrik.pl/polityka-prywatnosci' },
+    alternates: { canonical: `${siteUrl}/polityka-prywatnosci` },
 };
 
 export default function PolitykaPrywatnosci() {
@@ -128,7 +129,7 @@ export default function PolitykaPrywatnosci() {
                 <h2 className="legal-h2">§ 1. Informacje ogólne</h2>
                 <p className="legal-p">
                     Niniejsza Polityka Prywatności określa zasady przetwarzania i ochrony danych osobowych
-                    użytkowników serwisu internetowego <strong style={{color:'#F5F5F5'}}>mrfrik.pl</strong> prowadzonego przez PF Group Sp. z o.o.
+                    użytkowników serwisu internetowego <strong style={{color:'#F5F5F5'}}>{siteHostname}</strong> prowadzonego przez PF Group Sp. z o.o.
                     z siedzibą w Środzie Śląskiej (dalej: „Administrator" lub „Spółka").
                 </p>
                 <p className="legal-p">

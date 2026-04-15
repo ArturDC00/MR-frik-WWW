@@ -1,5 +1,6 @@
 import './globals.css';
 import Script from 'next/script';
+import { siteUrl } from '../config/site';
 
 export const viewport = {
     width: 'device-width',
@@ -8,7 +9,7 @@ export const viewport = {
 };
 
 export const metadata = {
-    metadataBase: new URL('https://mrfrik.pl'),
+    metadataBase: new URL(siteUrl),
     title: 'MrFrik — Import Samochodów z USA i Kanady do Polski',
     description:
         'MrFrik – profesjonalny import samochodów z USA i Kanady do Polski. Ponad 1500 sprowadzonych aut, 98% zadowolonych klientów. Pełna transparentność, weryfikacja VIN, transport morski, odprawa celna i dostawa pod dom.',
@@ -36,18 +37,18 @@ export const metadata = {
         },
     },
     alternates: {
-        canonical: 'https://mrfrik.pl/',
+        canonical: `${siteUrl}/`,
     },
     openGraph: {
         type: 'website',
-        url: 'https://mrfrik.pl/',
+        url: `${siteUrl}/`,
         siteName: 'MrFrik Import',
         title: 'MrFrik — Import Samochodów z USA i Kanady do Polski',
         description:
             'Sprowadź wymarzone auto z USA lub Kanady. Ponad 1500 aut, 98% zadowolonych klientów. Weryfikacja VIN, transport, odprawa celna, dostawa pod dom.',
         images: [
             {
-                url: 'https://mrfrik.pl/og-image.jpg',
+                url: `${siteUrl}/og-image.jpg`,
                 width: 1200,
                 height: 630,
                 alt: 'MrFrik — Import Samochodów z USA i Kanady',
@@ -62,7 +63,7 @@ export const metadata = {
         title: 'MrFrik — Import Samochodów z USA i Kanady',
         description:
             'Sprowadź wymarzone auto z USA lub Kanady. Ponad 1500 aut, pełna transparentność, dostawa pod dom.',
-        images: ['https://mrfrik.pl/og-image.jpg'],
+        images: [`${siteUrl}/og-image.jpg`],
     },
     icons: {
         icon: [
@@ -78,7 +79,7 @@ export const metadata = {
     },
 };
 
-const jsonLd = {
+const jsonLdBase = {
     '@context': 'https://schema.org',
     '@graph': [
         {
@@ -252,6 +253,10 @@ const jsonLd = {
         },
     ],
 };
+
+const jsonLd = JSON.parse(
+    JSON.stringify(jsonLdBase).replace(/https:\/\/mrfrik\.pl/g, siteUrl),
+);
 
 export default function RootLayout({ children }) {
     return (

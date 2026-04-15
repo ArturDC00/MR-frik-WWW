@@ -7,7 +7,7 @@ Disallow: /.claude/
 Disallow: /node_modules/
 
 # Sitemap
-Sitemap: https://mrfrik.pl/sitemap.xml
+Sitemap: https://mrfrik.com/sitemap.xml
 
 # Crawl-delay dla grzecznych botów
 Crawl-delay: 1

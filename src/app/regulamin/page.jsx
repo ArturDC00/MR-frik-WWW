@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { ScrollRestorer } from '../../components/UI/ScrollRestorer';
+import { siteUrl, siteHostname } from '../../config/site';
 
 export const metadata = {
     title: 'Regulamin — MrFrik Import',
     description: 'Regulamin świadczenia usług importu samochodów z USA i Kanady przez PF Group Sp. z o.o. (MrFrik).',
     robots: { index: true, follow: true },
-    alternates: { canonical: 'https://mrfrik.pl/regulamin' },
+    alternates: { canonical: `${siteUrl}/regulamin` },
 };
 
 export default function Regulamin() {
@@ -133,7 +134,7 @@ export default function Regulamin() {
                 </p>
                 <p className="legal-p">
                     Korzystanie z usług Spółki jest równoznaczne z akceptacją niniejszego Regulaminu.
-                    Regulamin jest dostępny na stronie mrfrik.pl/regulamin.
+                    Regulamin jest dostępny na stronie {siteHostname}/regulamin.
                 </p>
 
                 <h2 className="legal-h2">§ 2. Definicje</h2>
@@ -143,7 +144,7 @@ export default function Regulamin() {
                     <li><strong style={{color:'#F5F5F5'}}>Usługa</strong> — kompleksowa obsługa importu pojazdu z USA lub Kanady do Polski</li>
                     <li><strong style={{color:'#F5F5F5'}}>Pojazd</strong> — samochód osobowy, SUV, pickup lub inny pojazd silnikowy będący przedmiotem importu</li>
                     <li><strong style={{color:'#F5F5F5'}}>Aukcja</strong> — platforma sprzedaży pojazdów (Copart, IAAI, Impact Auto lub dealerska)</li>
-                    <li><strong style={{color:'#F5F5F5'}}>Serwis</strong> — strona internetowa mrfrik.pl wraz z platformą online</li>
+                    <li><strong style={{color:'#F5F5F5'}}>Serwis</strong> — strona internetowa {siteHostname} wraz z platformą online</li>
                 </ul>
 
                 <h2 className="legal-h2">§ 3. Zakres usług</h2>
@@ -235,7 +236,7 @@ export default function Regulamin() {
                     <Link href="/polityka-prywatnosci" style={{color:'#FD9731', textDecoration:'underline', textUnderlineOffset:'3px'}}>
                         Polityka Prywatności
                     </Link>{' '}
-                    dostępna na stronie mrfrik.pl/polityka-prywatnosci.
+                    dostępna na stronie {siteHostname}/polityka-prywatnosci.
                 </p>
 
                 <h2 className="legal-h2">§ 11. Postanowienia końcowe</h2>
@@ -249,7 +250,7 @@ export default function Regulamin() {
                 </p>
                 <p className="legal-p">
                     Spółka zastrzega sobie prawo do zmiany Regulaminu. Zmiany wchodzą w życie z dniem ich
-                    opublikowania na stronie mrfrik.pl/regulamin.
+                    opublikowania na stronie {siteHostname}/regulamin.
                 </p>
 
                 <h2 className="legal-h2">§ 12. Kontakt</h2>

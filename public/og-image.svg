@@ -74,7 +74,7 @@
 
   <!-- CTA -->
   <rect x="730" y="470" width="380" height="72" rx="36" fill="rgba(253,151,49,0.12)" stroke="#FD9731" stroke-width="1.5" stroke-opacity="0.6"/>
-  <text x="920" y="514" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="600" fill="#FD9731" text-anchor="middle" letter-spacing="1">mrfrik.pl</text>
+  <text x="920" y="514" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="600" fill="#FD9731" text-anchor="middle" letter-spacing="1">mrfrik.com</text>
 
   <!-- Dekoracyjny okrąg/globus po prawej stronie -->
   <circle cx="950" cy="250" r="200" fill="none" stroke="rgba(253,151,49,0.08)" stroke-width="1"/>

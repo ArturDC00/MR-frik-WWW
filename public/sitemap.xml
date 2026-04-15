@@ -4,51 +4,51 @@
 
   <!-- Strona główna -->
   <url>
-    <loc>https://mrfrik.pl/</loc>
+    <loc>https://mrfrik.com/</loc>
     <lastmod>2026-03-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
-    <xhtml:link rel="alternate" hreflang="pl" href="https://mrfrik.pl/"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://mrfrik.com/"/>
   </url>
 
   <!-- Sekcje (anchor links dla botów) -->
   <url>
-    <loc>https://mrfrik.pl/#section-process</loc>
+    <loc>https://mrfrik.com/#section-process</loc>
     <lastmod>2026-03-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://mrfrik.pl/#section-dream</loc>
+    <loc>https://mrfrik.com/#section-dream</loc>
     <lastmod>2026-03-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
-    <loc>https://mrfrik.pl/#section-values</loc>
+    <loc>https://mrfrik.com/#section-values</loc>
     <lastmod>2026-03-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
 
   <url>
-    <loc>https://mrfrik.pl/#section-trust</loc>
+    <loc>https://mrfrik.com/#section-trust</loc>
     <lastmod>2026-03-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
-    <loc>https://mrfrik.pl/#section-faq</loc>
+    <loc>https://mrfrik.com/#section-faq</loc>
     <lastmod>2026-03-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://mrfrik.pl/#section-contact</loc>
+    <loc>https://mrfrik.com/#section-contact</loc>
     <lastmod>2026-03-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
