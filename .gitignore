@@ -25,3 +25,6 @@ dist-ssr
 *.sw?
 .vercel
 .env*.local
+
+# Archiwa — GitHub limit 100 MB na plik
+Archiwum.zip
