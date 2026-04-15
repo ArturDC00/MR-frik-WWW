@@ -36,24 +36,26 @@ const nextConfig = {
     transpilePackages: ['three', '@react-three/fiber', '@react-three/drei', '@react-three/postprocessing'],
 
     // Security headers — Lighthouse Best Practices + OWASP
+    // HSTS tylko gdy ENABLE_HSTS=true (wdrożenie za prawdziwym HTTPS). Na samym HTTP
+    // (np. IP serwera) nagłówek HSTS psuje ładowanie CSS/JS — przeglądarka wymusza https://.
     async headers() {
+        const baseSecurity = [
+            { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+            { key: 'X-Content-Type-Options', value: 'nosniff' },
+            { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+            { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+            { key: 'X-XSS-Protection', value: '1; mode=block' },
+        ];
+        if (process.env.ENABLE_HSTS === 'true') {
+            baseSecurity.push({
+                key: 'Strict-Transport-Security',
+                value: 'max-age=31536000; includeSubDomains; preload',
+            });
+        }
         return [
             {
                 source: '/(.*)',
-                headers: [
-                    // Zapobiega clickjacking (iframe embedding)
-                    { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-                    // Zapobiega MIME sniffing
-                    { key: 'X-Content-Type-Options', value: 'nosniff' },
-                    // Referrer dla prywatności
-                    { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-                    // Blokuje niebezpieczne permisje przeglądarki
-                    { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-                    // Wymusza HTTPS przez rok (Strict-Transport-Security)
-                    { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
-                    // XSS Protection (legacy, ale Lighthouse to sprawdza)
-                    { key: 'X-XSS-Protection', value: '1; mode=block' },
-                ],
+                headers: baseSecurity,
             },
             {
                 // Statyczne assety — długi cache
