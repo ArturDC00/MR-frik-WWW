@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'; // useRef needed for carContainerRef + section
 import Image from 'next/image';
+import { useImportCountTarget } from '../Providers/ImportCountProvider';
 
 // Canvas 3D usunięty — powodował 3. instancję WebGL jednocześnie z Globusem i Porsche.
 // Trzy Canvas = WebGL context loss = czarny ekran na Mac/mobile.
@@ -310,6 +311,31 @@ function useCounter(end, duration = 2500, shouldStart = false) {
     return count;
 }
 
+/** Licznik +1 aż do `target` (np. wartość z API per IP). */
+function useStepToTarget(target, shouldStart) {
+    const [display, setDisplay] = useState(2200);
+
+    useEffect(() => {
+        if (!shouldStart) return;
+        const dest = Math.max(2200, Math.floor(Number(target) || 2200));
+        const start = Math.max(2150, dest - 58);
+        setDisplay(start);
+        let n = start;
+        const id = window.setInterval(() => {
+            n += 1;
+            if (n >= dest) {
+                setDisplay(dest);
+                window.clearInterval(id);
+                return;
+            }
+            setDisplay(n);
+        }, 16);
+        return () => window.clearInterval(id);
+    }, [target, shouldStart]);
+
+    return display;
+}
+
 // Animated Line — pure CSS, no JS animation loop, always fully visible
 // Background track + travelling spark via CSS keyframes (60fps GPU-composited)
 function AnimatedLine({ pathData, gradientId, position, isLeft, hasAnimated }) {
@@ -518,7 +544,8 @@ export function TrustSection() {
         return () => window.removeEventListener('scroll', handleScroll);
     }, [isVisible]);
 
-    const count1 = useCounter(2200, 2500, hasAnimated);
+    const { targetCount: importTarget, ready: importCountReady } = useImportCountTarget();
+    const count1 = useStepToTarget(importTarget, hasAnimated && importCountReady);
     const count2 = useCounter(99, 2500, hasAnimated);
 
     const lineTopLeft = {

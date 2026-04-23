@@ -67,7 +67,7 @@ export function SmoothScroll({ children }) {
     }, []);
 
     return (
-        <div style={{ width: '100%', minHeight: '100vh' }}>
+        <div style={{ width: '100%', minHeight: '100%', position: 'relative' }}>
             {children}
         </div>
     );

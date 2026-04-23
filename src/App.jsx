@@ -23,7 +23,6 @@ import { COLORS } from './constants/colors';
 import { vector3ToLatLng, latLngToVector3 } from './utils/math';
 import { isPointInPolygon } from './utils/geography';
 import { SmoothScroll } from './utils/SmoothScroll';
-import { FooterReveal } from './utils/FooterReveal';
 
 // ============ GLOBE COMPONENTS ============
 import { ElegantGlobe } from './components/Globe/ElegantGlobe';
@@ -89,7 +88,7 @@ function SectionFallback() {
 // ============================================================
 // ORBIT CONTROLS - memoized, żeby nie reconnectował przy każdym re-renderze App
 // ============================================================
-const StableOrbitControls = React.memo(function StableOrbitControls() {
+const StableOrbitControls = React.memo(function StableOrbitControls({ onEnd }) {
     return (
         <OrbitControls
             enableRotate={true}
@@ -98,6 +97,7 @@ const StableOrbitControls = React.memo(function StableOrbitControls() {
             minDistance={50}
             maxDistance={150}
             rotateSpeed={0.5}
+            onEnd={onEnd}
         />
     );
 });
@@ -112,12 +112,6 @@ function GlobeNavButtons({ show }) {
 
     const scrollTo = (id) => {
         setMobileOpen(false);
-        // Kontakt jest w FooterReveal (position: fixed) – przewijamy do końca strony
-        if (id === 'section-contact') {
-            if (window.lenis) window.lenis.scrollTo(document.body.scrollHeight);
-            else window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-            return;
-        }
         const el = document.getElementById(id);
         if (!el) return;
         // Lenis v1 — używamy lenis.scrollTo() zamiast scrollIntoView (inaczej scroll się "bije")
@@ -369,87 +363,6 @@ function GlobeNavButtons({ show }) {
 }
 
 // ============================================================
-// WHATSAPP FLOATING BUTTON
-// TODO: Zastąp numer placeholder (+48 000 000 000) prawdziwym numerem WhatsApp
-// ============================================================
-function WhatsAppFAB({ show }) {
-    if (!show) return null;
-    return (
-        <>
-            <style>{`
-                .wa-fab {
-                    position: fixed;
-                    bottom: max(28px, env(safe-area-inset-bottom, 28px));
-                    left: 20px;
-                    z-index: 100;
-                    width: 54px;
-                    height: 54px;
-                    border-radius: 50%;
-                    background: #25D366;
-                    border: none;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    box-shadow:
-                        0 4px 20px rgba(37,211,102,0.45),
-                        0 2px 8px rgba(0,0,0,0.35);
-                    transition: transform 0.25s cubic-bezier(.34,1.56,.64,1), box-shadow 0.2s ease;
-                    -webkit-tap-highlight-color: transparent;
-                    outline: none;
-                    text-decoration: none;
-                }
-                .wa-fab:hover {
-                    transform: scale(1.08);
-                    box-shadow:
-                        0 6px 28px rgba(37,211,102,0.6),
-                        0 2px 8px rgba(0,0,0,0.35);
-                }
-                .wa-fab:active {
-                    transform: scale(0.92);
-                }
-                .wa-fab-tooltip {
-                    position: absolute;
-                    left: 62px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    background: rgba(2,2,3,0.85);
-                    backdrop-filter: blur(10px);
-                    -webkit-backdrop-filter: blur(10px);
-                    border: 1px solid rgba(37,211,102,0.25);
-                    border-radius: 10px;
-                    padding: 6px 12px;
-                    color: #F5F5F5;
-                    font-family: Inter, sans-serif;
-                    font-size: 13px;
-                    font-weight: 500;
-                    white-space: nowrap;
-                    pointer-events: none;
-                    opacity: 0;
-                    transition: opacity 0.2s ease;
-                }
-                .wa-fab:hover .wa-fab-tooltip {
-                    opacity: 1;
-                }
-            `}</style>
-            <a
-                href="https://wa.me/48798916868?text=Cześć,%20chciałbym%20dowiedzieć%20się%20więcej%20o%20imporcie%20auta%20z%20USA."
-                target="_blank"
-                rel="noopener noreferrer"
-                className="wa-fab"
-                aria-label="Napisz do nas na WhatsApp"
-            >
-                <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-                    <path d="M16 2.667C8.636 2.667 2.667 8.636 2.667 16c0 2.353.629 4.558 1.727 6.462L2.667 29.333l7.09-1.698A13.267 13.267 0 0016 29.333c7.364 0 13.333-5.97 13.333-13.333S23.364 2.667 16 2.667z" fill="white"/>
-                    <path d="M22.182 19.394c-.303-.152-1.794-.885-2.073-.985-.279-.1-.481-.152-.683.152-.203.303-.782.985-.958 1.188-.177.203-.353.228-.656.076-.303-.152-1.28-.472-2.438-1.506-.9-.804-1.509-1.797-1.685-2.1-.177-.303-.019-.467.133-.618.136-.135.303-.354.455-.531.152-.177.202-.303.303-.505.101-.203.05-.38-.025-.531-.076-.152-.683-1.645-.936-2.252-.246-.592-.496-.512-.683-.521-.177-.008-.38-.01-.582-.01-.203 0-.531.076-.808.38-.278.304-1.062 1.038-1.062 2.531s1.087 2.936 1.238 3.138c.152.203 2.14 3.266 5.186 4.578.725.313 1.29.5 1.73.64.727.23 1.388.198 1.911.12.583-.087 1.794-.733 2.047-1.442.253-.709.253-1.316.177-1.442-.076-.126-.278-.202-.581-.354z" fill="#25D366"/>
-                </svg>
-                <span className="wa-fab-tooltip">WhatsApp</span>
-            </a>
-        </>
-    );
-}
-
-// ============================================================
 // GLOBALNA DETEKCJA WYDAJNOŚCI — raz na session
 // Obejmuje: stare smartfony, low-end Androidy, małe ekrany
 // ============================================================
@@ -494,6 +407,8 @@ export default function App() {
     const [scrollProgress, setScrollProgress] = useState(0);
 
     const [isGlobeInteracting, setIsGlobeInteracting] = useState(false);
+    /** Po najechaniu na kraj / obrocie globusa: wstrzymaj auto-obrót siatki (mobile nie „wraca” do USA). */
+    const [globeAutoSpinPaused, setGlobeAutoSpinPaused] = useState(false);
     const [sectionsReady, setSectionsReady] = useState(false);
     // activePort usunięte — porty zastąpione country info cards
     const globeRotation = useRef(0);
@@ -543,6 +458,9 @@ export default function App() {
             setScrollProgress(prev =>
                 Math.abs(newProgress - prev) > 0.003 ? newProgress : prev
             );
+            if (newProgress > 0.15) {
+                setGlobeAutoSpinPaused(false);
+            }
         };
         const onLenis = (e) => update(e.detail);
         const onScroll = () => update(window.scrollY);
@@ -552,6 +470,10 @@ export default function App() {
             window.removeEventListener('app:scroll', onLenis);
             window.removeEventListener('scroll', onScroll);
         };
+    }, []);
+
+    const onOrbitInteractionEnd = useCallback(() => {
+        setGlobeAutoSpinPaused(true);
     }, []);
 
     // ============ HANDLE GLOBE EVENT ✅ Z INLINE findCountry ============
@@ -604,6 +526,7 @@ export default function App() {
 
         if (type === 'CLICK') {
             if (validResult) {
+                setGlobeAutoSpinPaused(true);
                 const props = validResult.f.properties;
                 const name = props.admin || props.name || props.name_long;
                 setIsGlobeInteracting(true);
@@ -643,6 +566,7 @@ export default function App() {
                 return;
             }
             if (validResult && event) {
+                setGlobeAutoSpinPaused(true);
                 const props = validResult.f.properties;
                 const name = props.admin || props.name || props.name_long;
                 setIsGlobeInteracting(true);
@@ -686,7 +610,6 @@ export default function App() {
                 pointerEvents: introDone ? 'auto' : 'none',
             }}>
                 <GlobeNavButtons show={introDone} />
-                <WhatsAppFAB show={introDone} />
             </div>
 
             <SmoothScroll>
@@ -733,6 +656,7 @@ export default function App() {
                             isLoaded={isLoaded}
                             target={focusPoint}
                             onIntroComplete={() => setIntroDone(true)}
+                            orbitControlsActive={!focusPoint && introDone && scrollProgress < 0.05}
                         />
 
                         {/* LOW: ambient + 1 point
@@ -761,10 +685,16 @@ export default function App() {
                             hoverGeometry={hoverGeometry}
                             globeRotation={globeRotation}
                             isIntroDone={introDone}
+                            pauseAutoRotate={
+                                globeAutoSpinPaused ||
+                                Boolean(hoverGeometry) ||
+                                Boolean(activeGeometry) ||
+                                Boolean(focusPoint)
+                            }
                         />
 
                         {!focusPoint && introDone && scrollProgress < 0.05 && (
-                            <StableOrbitControls />
+                            <StableOrbitControls onEnd={onOrbitInteractionEnd} />
                         )}
 
                         {/* LOW: brak post-processingu
@@ -877,18 +807,17 @@ export default function App() {
                             <SectionFallback />
                         )}
                     </div>
-                </main>
 
-                {/* FOOTER */}
-                <FooterReveal>
-                    {sectionsReady ? (
-                        <Suspense fallback={<div style={{ minHeight: '400px', background: '#020203' }} />}>
-                            <ContactSection />
-                        </Suspense>
-                    ) : (
-                        <div style={{ minHeight: '400px', background: '#020203' }} />
-                    )}
-                </FooterReveal>
+                    <div id="section-contact-wrap" style={{ paddingTop: 'clamp(48px, 7vh, 100px)' }}>
+                        {sectionsReady ? (
+                            <Suspense fallback={<SectionFallback />}>
+                                <ContactSection />
+                            </Suspense>
+                        ) : (
+                            <SectionFallback />
+                        )}
+                    </div>
+                </main>
 
             </SmoothScroll>
 

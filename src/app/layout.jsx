@@ -1,6 +1,7 @@
 import './globals.css';
 import Script from 'next/script';
 import { siteUrl } from '../config/site';
+import { ImportCountProvider } from '../components/Providers/ImportCountProvider';
 
 export const viewport = {
     width: 'device-width',
@@ -275,7 +276,7 @@ export default function RootLayout({ children }) {
                 />
             </head>
             <body>
-            {children}
+            <ImportCountProvider>{children}</ImportCountProvider>
             <Script
                 id="bitrix24-crm"
                 strategy="lazyOnload"

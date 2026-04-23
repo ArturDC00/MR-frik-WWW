@@ -161,6 +161,7 @@ export const ElegantGlobe = forwardRef(({
     hoverGeometry,
     globeRotation,
     isIntroDone,
+    pauseAutoRotate = false,
 }, ref) => {
     const [geoData, setGeoData] = useState(null);
     const groupRef = useRef();
@@ -312,7 +313,7 @@ export const ElegantGlobe = forwardRef(({
 
         const t = state.clock.elapsedTime;
 
-        if (groupRef.current && !activeGeometry && isIntroDone) {
+        if (groupRef.current && !activeGeometry && isIntroDone && !pauseAutoRotate) {
             groupRef.current.rotation.y += 0.0003;
             if (globeRotation && globeRotation.current !== undefined) {
                 globeRotation.current = groupRef.current.rotation.y;

@@ -165,3 +165,14 @@ body {
         scroll-behavior: auto !important;
     }
 }
+
+/* Bitrix24 — przycisk czatu na lewo (domyślnie prawa strona) */
+.b24-widget-button-wrapper,
+.b24-widget-button-position-bottom-right {
+    right: auto !important;
+    left: max(12px, env(safe-area-inset-left, 0px)) !important;
+}
+
+.b24-widget-button-position-bottom-left {
+    left: max(12px, env(safe-area-inset-left, 0px)) !important;
+}

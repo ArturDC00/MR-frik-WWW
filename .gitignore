@@ -26,5 +26,8 @@ dist-ssr
 .vercel
 .env*.local
 
+# Licznik marketingowy (per IP) — generowany na serwerze
+data/import_display_counts.json
+
 # Archiwa — GitHub limit 100 MB na plik
 Archiwum.zip

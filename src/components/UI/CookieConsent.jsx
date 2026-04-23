@@ -37,13 +37,18 @@ export function CookieConsent() {
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="cc-dialog-title"
+                    className="cc-dialog-root"
                     style={{
                         position: 'fixed',
-                        bottom: '24px',
+                        bottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
                         left: '50%',
                         transform: 'translateX(-50%)',
                         zIndex: 9998,
-                        width: 'min(640px, calc(100vw - 32px))',
+                        width: 'min(640px, calc(100vw - 24px))',
+                        maxHeight: 'min(78dvh, calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px))',
+                        overflowY: 'auto',
+                        WebkitOverflowScrolling: 'touch',
+                        overscrollBehavior: 'contain',
                         background: 'rgba(5, 8, 15, 0.95)',
                         backdropFilter: 'blur(24px)',
                         WebkitBackdropFilter: 'blur(24px)',

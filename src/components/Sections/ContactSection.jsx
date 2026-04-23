@@ -2,11 +2,13 @@
 // ============================================================
 // CONTACT SECTION — Apple Design 2026
 // 2-kolumnowy layout: lewa = hero, prawa = formularz
-// Submit via mailto, social links zaktualizowane
+// Lead: POST /api/lead → Bitrix crm.lead.add (BITRIX24_WEBHOOK_BASE w .env.local).
+// Skrypt czatu w layout.jsx to osobny widget (site_button).
 // ============================================================
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useImportCountTarget } from '../Providers/ImportCountProvider';
 
 // ── MULTI-STEP LEAD FORM ──────────────────────────────────
 const BUDGET_OPTIONS = [
@@ -35,26 +37,48 @@ function LeadForm() {
     const [email, setEmail] = useState('');
     const [rodo, setRodo] = useState(false);
     const [sent, setSent] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState('');
 
-    const handleSubmit = () => {
-        const subject = encodeURIComponent(
-            `Zapytanie o import — ${carType}${model ? ` — ${model}` : ''}`
-        );
-        const body = encodeURIComponent(
-            `Imię: ${name}\n` +
-            `Telefon: ${phone}\n` +
-            `E-mail: ${email}\n` +
-            `Typ auta: ${carType}\n` +
-            `Model: ${model || 'nie podano'}\n` +
-            `Budżet: ${budget}`
-        );
-        window.location.href = `mailto:maleclicytacje@gmail.com?subject=${subject}&body=${body}`;
-        setSent(true);
+    const handleSubmit = async () => {
+        setSubmitError('');
+        setSubmitting(true);
+        try {
+            const res = await fetch('/api/lead', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name.trim(),
+                    phone: phone.trim(),
+                    email: email.trim(),
+                    carType,
+                    model: model.trim(),
+                    budget,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(data.error || 'Nie udało się wysłać zapytania.');
+            }
+            setSent(true);
+        } catch (e) {
+            setSubmitError(e instanceof Error ? e.message : 'Błąd sieci.');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const resetForm = () => {
-        setSent(false); setStep(1); setModel(''); setCarType('');
-        setBudget(''); setName(''); setPhone(''); setEmail(''); setRodo(false);
+        setSent(false);
+        setStep(1);
+        setModel('');
+        setCarType('');
+        setBudget('');
+        setName('');
+        setPhone('');
+        setEmail('');
+        setRodo(false);
+        setSubmitError('');
     };
 
     return (
@@ -70,7 +94,7 @@ function LeadForm() {
                 <div className="lf-sent">
                     <span className="lf-sent-icon">✅</span>
                     <p className="lf-sent-title">Gotowe!</p>
-                    <p className="lf-sent-sub">Otwarto klienta pocztowego z Twoją wiadomością.<br />Odezwiemy się tak szybko jak to możliwe.</p>
+                    <p className="lf-sent-sub">Zapisaliśmy Twoje zapytanie w systemie.<br />Skontaktujemy się tak szybko, jak to możliwe.</p>
                     <button className="lf-btn lf-btn-primary" onClick={resetForm}>
                         Wyślij kolejne zapytanie
                     </button>
@@ -160,18 +184,28 @@ function LeadForm() {
                         <input type="checkbox" checked={rodo} onChange={e => setRodo(e.target.checked)} />
                         <span>Wyrażam zgodę na przetwarzanie moich danych osobowych przez PF Group Sp. z o.o. w celu obsługi zapytania. <a href="/polityka-prywatnosci" className="lf-rodo-link">Polityka prywatności</a>.</span>
                     </label>
+                    {submitError ? (
+                        <p className="lf-api-error" role="alert">{submitError}</p>
+                    ) : null}
                     <div className="lf-row">
-                        <button className="lf-btn lf-btn-ghost" onClick={() => setStep(2)}>← Wróć</button>
+                        <button type="button" className="lf-btn lf-btn-ghost" disabled={submitting} onClick={() => setStep(2)}>← Wróć</button>
                         <button
+                            type="button"
                             className="lf-btn lf-btn-email"
-                            disabled={!name.trim() || !phone.trim() || !email.trim() || !rodo}
-                            onClick={handleSubmit}
+                            disabled={!name.trim() || !phone.trim() || !email.trim() || !rodo || submitting}
+                            onClick={() => void handleSubmit()}
                         >
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
-                                <rect x="2" y="4" width="20" height="16" rx="2"/>
-                                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-                            </svg>
-                            Wyślij zapytanie
+                            {submitting ? (
+                                'Wysyłanie…'
+                            ) : (
+                                <>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
+                                        <rect x="2" y="4" width="20" height="16" rx="2" />
+                                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                                    </svg>
+                                    Wyślij zapytanie
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>
@@ -181,17 +215,10 @@ function LeadForm() {
 }
 
 export function ContactSection() {
+    const { targetCount, ready } = useImportCountTarget();
+    const importCarsLabel = ready ? targetCount : 2200;
+
     const socials = [
-        {
-            label: 'WhatsApp',
-            href: 'https://wa.me/48798916868',
-            icon: (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                </svg>
-            ),
-            color: '#25D366',
-        },
         {
             label: 'Facebook',
             href: 'https://facebook.com/mrfrik.import/',
@@ -262,7 +289,7 @@ export function ContactSection() {
                                     <rect x="1" y="3" width="15" height="13" rx="2"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
                                 </svg>
                             </span>
-                            <span>Ponad 2200 aut sprowadzonych</span>
+                            <span>Ponad {importCarsLabel} aut sprowadzonych</span>
                         </div>
                         <div className="cs-badge">
                             <span className="cs-badge-icon">
@@ -356,17 +383,17 @@ export function ContactSection() {
                 /* ── SEKCJA ── */
                 .cs-section {
                     width: 100%;
-                    min-height: 100vh;
+                    min-height: auto;
                     background: radial-gradient(ellipse 120% 80% at 50% 100%, #111827 0%, #0a0a0f 60%, #020203 100%);
                     display: flex;
                     flex-direction: column;
                     align-items: center;
-                    justify-content: space-between;
+                    justify-content: flex-start;
                     position: relative;
                     overflow: hidden;
-                    padding: clamp(60px,8vh,120px) clamp(20px,5vw,80px) clamp(40px,5vh,64px);
+                    padding: clamp(48px, 6vh, 96px) clamp(20px, 5vw, 80px) clamp(32px, 5vh, 72px);
                     box-sizing: border-box;
-                    gap: clamp(40px,5vh,64px);
+                    gap: clamp(32px, 4vh, 56px);
                 }
 
                 /* ── AMBIENT LIGHT ── */
@@ -853,6 +880,17 @@ export function ContactSection() {
                 .lf-btn-email:not(:disabled):hover {
                     transform: translateY(-2px);
                     box-shadow: 0 8px 24px rgba(253,151,49,0.45);
+                }
+                .lf-api-error {
+                    font-family: Inter, sans-serif;
+                    font-size: 13px;
+                    line-height: 1.5;
+                    color: #ffb4a8;
+                    margin: 8px 0 0;
+                    padding: 10px 14px;
+                    border-radius: 10px;
+                    background: rgba(180, 40, 40, 0.2);
+                    border: 1px solid rgba(255, 120, 100, 0.25);
                 }
                 /* Sent state */
                 .lf-sent {
