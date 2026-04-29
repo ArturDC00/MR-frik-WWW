@@ -1,12 +1,9 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
-import bundleAnalyzer from '@next/bundle-analyzer';
+import { createRequire } from 'module';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const withBundleAnalyzer = bundleAnalyzer({
-    enabled: process.env.ANALYZE === 'true',
-});
+const require = createRequire(import.meta.url);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -102,4 +99,24 @@ const nextConfig = {
     },
 };
 
-export default withBundleAnalyzer(nextConfig);
+/**
+ * @next/bundle-analyzer tylko przy ANALYZE=true — bez require przy zwykłym buildu
+ * (np. CI/VPS z `npm ci --omit=dev` bez devDependencies).
+ */
+function finalize(config) {
+    if (process.env.ANALYZE === 'true') {
+        try {
+            const bundleAnalyzer = require('@next/bundle-analyzer');
+            return bundleAnalyzer({ enabled: true })(config);
+        } catch (e) {
+            console.warn(
+                '[next.config] ANALYZE=true, ale nie można załadować @next/bundle-analyzer — build bez analizy.',
+                e?.message || e,
+            );
+            return config;
+        }
+    }
+    return config;
+}
+
+export default finalize(nextConfig);
