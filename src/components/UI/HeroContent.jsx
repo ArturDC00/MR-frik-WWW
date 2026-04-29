@@ -90,6 +90,7 @@ export function HeroContent({ scrollProgress, isGlobeInteracting, introDone }) {
                     alt="MrFrik — Import samochodów z USA i Kanady"
                     width={deviceType === 'MOBILE' ? 180 : 240}
                     height={deviceType === 'MOBILE' ? 128 : 170}
+                    sizes="(max-width: 767px) 180px, 240px"
                     style={{ objectFit: 'contain', objectPosition: 'left center' }}
                     priority
                 />

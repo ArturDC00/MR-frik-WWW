@@ -1,5 +1,6 @@
 import './globals.css';
 import './ui-overrides.css';
+import { LOGO_PATH } from '../constants/config';
 import { siteUrl } from '../config/site';
 import { ImportCountProvider } from '../components/Providers/ImportCountProvider';
 import { BitrixChatScript } from '../components/Providers/BitrixChatScript';
@@ -264,6 +265,8 @@ export default function RootLayout({ children }) {
     return (
         <html lang="pl">
             <head>
+                {/* Logo hero (typowy LCP) — przed fontami, żeby nie czekał w kolejce za 3 preloadami */}
+                <link rel="preload" href={LOGO_PATH} as="image" fetchPriority="high" />
                 {/* Inter — preload w <head> + fetchPriority: wcześniejszy start niż @font-face z CSS (LCP) */}
                 <link
                     rel="preload"

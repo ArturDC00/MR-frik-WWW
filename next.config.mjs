@@ -9,6 +9,11 @@ const require = createRequire(import.meta.url);
 const nextConfig = {
     reactStrictMode: false, // R3F/GSAP nie lubią strict mode (double-invoke effects)
 
+    compiler: {
+        // Lekko mniej pracy na main thread w prod (Lighthouse „Reduce JS execution time”)
+        removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
+    },
+
     experimental: {
         // Mniejsze importy z barrel files — mniej kodu w bundlu klienta (TBT)
         optimizePackageImports: ['framer-motion', '@react-three/drei', 'gsap', 'lenis'],
