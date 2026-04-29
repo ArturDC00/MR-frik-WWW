@@ -1,0 +1,42 @@
+# Wdrożenie po pushu na branch `main`.
+#
+# Sekrety (Settings → Secrets and variables → Actions):
+#   DEPLOY_HOST     — IP lub hostname VPS
+#   DEPLOY_USER     — ubuntu
+#   DEPLOY_SSH_KEY  — prywatny klucz SSH do logowania Actions → VPS (cały PEM)
+#
+# Na serwerze osobno: Deploy Key tylko do `git pull` (repo → Deploy keys).
+# Szczegóły: deploy/GITHUB-DEPLOY.md
+#
+name: Deploy WWW (production)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH — pull, build, PM2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          command_timeout: 20m
+          script: |
+            bash -lc '
+            set -euo pipefail
+            cd /home/ubuntu/mrfrik-www
+            test -d .git || { echo "Brak .git — zobacz deploy/GITHUB-DEPLOY.md"; exit 1; }
+            git fetch origin main
+            git reset --hard origin/main
+            export NODE_ENV=production
+            npm ci
+            npm run build
+            pm2 restart mrfrik-www --update-env || PORT=3005 pm2 start npm --name mrfrik-www --cwd /home/ubuntu/mrfrik-www -- start
+            pm2 save
+            '
