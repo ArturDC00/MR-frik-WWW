@@ -616,7 +616,8 @@ export default function App() {
                     width: '100vw', height: '100vh',
                     zIndex: 2,
                     pointerEvents: scrollProgress > 0.3 ? 'none' : 'auto',
-                    touchAction: isLowPerf ? 'none' : 'pan-y',
+                    /* 'none': Lenis + pan-y na tablecie przejmowały drugi gest (scroll) zamiast obrotu globusa */
+                    touchAction: 'none',
                     // ✅ globeVisible: opóźnione fade-in chroni przed żółtym rozbłyskiem Bloom
                     opacity: globeVisible ? Math.max(0, 1 - scrollProgress * 1.5) : 0,
                     transition: globeVisible ? 'opacity 1.2s ease-out' : 'none',

@@ -1,7 +1,8 @@
 # GitHub → serwer (automatyczny deploy WWW)
 
 **HTTP/2 i HTTP/3 (Lighthouse, wydajność):** krok po kroku weryfikacja i typowe błędy — [`deploy/HTTP2-VERIFICATION.md`](./HTTP2-VERIFICATION.md).  
-**Instrukcja pod admina VPS OVH (nginx):** [`deploy/OVH-admin-HTTP2-HTTP3.md`](./OVH-admin-HTTP2-HTTP3.md).
+**Instrukcja pod admina VPS OVH (nginx):** [`deploy/OVH-admin-HTTP2-HTTP3.md`](./OVH-admin-HTTP2-HTTP3.md).  
+**Mobile: fonty Monument, analiza bundla, logo:** [`deploy/PERF-MOBILE-FONTS-BUNDLE-IMAGES.md`](./PERF-MOBILE-FONTS-BUNDLE-IMAGES.md) · `npm run analyze` · `npm run resize-hero-logo` · `npm run subset-fonts`.
 
 Po konfiguracji: **push na `main`** uruchamia workflow, który na VPS robi `git pull`, `npm ci`, `npm run build`, `pm2 restart mrfrik-www`.
 

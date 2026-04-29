@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
+import { LOGO_PATH } from '../../constants/config';
 
 /**
  * Hero: logo + nagłówek dostępne od pierwszego renderu (nie czekają na intro 3D).
@@ -85,7 +86,7 @@ export function HeroContent({ scrollProgress, isGlobeInteracting, introDone }) {
                 }}
             >
                 <Image
-                    src="/models/MrFrik_reBranding_logo_2025-13.png"
+                    src={LOGO_PATH}
                     alt="MrFrik — Import samochodów z USA i Kanady"
                     width={deviceType === 'MOBILE' ? 180 : 240}
                     height={deviceType === 'MOBILE' ? 128 : 170}

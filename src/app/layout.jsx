@@ -92,9 +92,9 @@ const jsonLdBase = {
             url: 'https://mrfrik.pl',
             logo: {
                 '@type': 'ImageObject',
-                url: 'https://mrfrik.pl/models/MrFrik_reBranding_logo_2025-13.png',
-                width: 3508,
-                height: 2481,
+                url: 'https://mrfrik.pl/models/MrFrik_reBranding_logo_2025-13-display.png',
+                width: 560,
+                height: 396,
             },
             description:
                 'Profesjonalny import samochodów z USA i Kanady do Polski. Weryfikacja VIN, Carfax, transport morski, odprawa celna, dostawa pod dom.',
@@ -276,6 +276,13 @@ export default function RootLayout({ children }) {
                 <link
                     rel="preload"
                     href="/fonts/inter-latin-ext.woff2"
+                    as="font"
+                    type="font/woff2"
+                    crossOrigin="anonymous"
+                />
+                <link
+                    rel="preload"
+                    href="/fonts/MonumentExtended-Ultrabold.subset.woff2"
                     as="font"
                     type="font/woff2"
                     crossOrigin="anonymous"

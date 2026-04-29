@@ -9,6 +9,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useImportCountTarget } from '../Providers/ImportCountProvider';
+import { LOGO_PATH } from '../../constants/config';
 
 // ── MULTI-STEP LEAD FORM ──────────────────────────────────
 const BUDGET_OPTIONS = [
@@ -336,7 +337,7 @@ export function ContactSection() {
             <div className="cs-bottom">
                 <div className="cs-logo-wrap">
                     <Image
-                        src="/models/MrFrik_reBranding_logo_2025-13.png"
+                        src={LOGO_PATH}
                         alt="MrFrik — Import Samochodów z USA i Kanady do Polski"
                         className="cs-logo"
                         width={3508}

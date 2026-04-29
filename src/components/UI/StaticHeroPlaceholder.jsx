@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { LOGO_PATH } from '../../constants/config';
 
 /**
  * Lekki, statyczny placeholder podczas ładowania chunka WebGL (next/dynamic).
@@ -31,7 +32,7 @@ export function StaticHeroPlaceholder() {
                 }}
             >
                 <Image
-                    src="/models/MrFrik_reBranding_logo_2025-13.png"
+                    src={LOGO_PATH}
                     alt=""
                     width={240}
                     height={170}

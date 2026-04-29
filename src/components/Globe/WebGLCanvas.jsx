@@ -8,9 +8,15 @@ import { COLORS } from '../../constants/colors';
 import { ElegantGlobe } from './ElegantGlobe';
 import { CameraController } from './CameraController';
 
-const StableOrbitControls = React.memo(function StableOrbitControls({ onEnd, rotateSpeed = 0.5 }) {
+const StableOrbitControls = React.memo(function StableOrbitControls({
+    onEnd,
+    rotateSpeed = 0.5,
+    /** false podczas fokusu na kraj — nie odmontowujemy kontrolek (unik resetu / „skoku” po zamknięciu panelu) */
+    enabled = true,
+}) {
     return (
         <OrbitControls
+            enabled={enabled}
             enableRotate
             enableZoom={false}
             enablePan={false}
@@ -60,7 +66,7 @@ export default function WebGLCanvas({
 
     return (
         <Canvas
-            style={{ touchAction: isLowPerf ? 'none' : 'pan-y' }}
+            style={{ touchAction: 'none' }}
             dpr={isLowPerf ? [0.75, 1] : isHighPerf ? [1, 1.5] : [1, 1.25]}
             frameloop={frameMode}
             gl={{
@@ -103,8 +109,12 @@ export default function WebGLCanvas({
                 enableGeoFetch={isLoaded}
             />
 
-            {!focusPoint && introDone && (
-                <StableOrbitControls onEnd={onOrbitInteractionEnd} rotateSpeed={orbitRotateSpeed} />
+            {introDone && (
+                <StableOrbitControls
+                    enabled={!focusPoint}
+                    onEnd={onOrbitInteractionEnd}
+                    rotateSpeed={orbitRotateSpeed}
+                />
             )}
 
             {!isLowPerf && (
