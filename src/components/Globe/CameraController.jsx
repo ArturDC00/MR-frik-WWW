@@ -12,19 +12,6 @@ const isMobileDevice = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgen
 
 const INTRO_DURATION = isMobileDevice() ? INTRO_DURATION_MOBILE : INTRO_DURATION_DESKTOP;
 
-// ============================================================
-// PERFORMANCE DETECTION
-// ============================================================
-function detectPerformanceTier() {
-    const cores = navigator.hardwareConcurrency || 2;
-    const memory = navigator.deviceMemory || 4;
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-    if (cores < 4 || memory < 4 || isMobile) return 'LOW';
-    if (cores <= 8 && memory <= 8) return 'MID';
-    return 'HIGH';
-}
-
 const CAMERA_SETTINGS = {
     LOW: {
         lerpSpeed: 2.0,          // Faster lerp = less smooth but better performance
@@ -49,18 +36,14 @@ const CAMERA_SETTINGS = {
 // IDLE    → ScrollytellingController przejmuje kontrolę
 // FOCUSED → użytkownik kliknął kraj/port
 
-export function CameraController({ isLoaded, target, onIntroComplete }) {
+export function CameraController({ isLoaded, target, onIntroComplete, perfTier = 'MID' }) {
     const { camera } = useThree();
     const state = useRef('INIT');
     const time = useRef(0);
     const lastFocusPos = useRef(null);
     const lastTarget = useRef(null);
     const frameCount = useRef(0);
-    // Zapamiętaj pozycję kamery PRZED fokusem — żeby wrócić tam gdzie było, nie do endPos
-    const preFocusPos = useRef(null);
 
-    // Performance detection
-    const [perfTier] = useState(() => detectPerformanceTier());
     const settings = CAMERA_SETTINGS[perfTier];
 
     // ✅ RWD: Device detection
@@ -154,10 +137,6 @@ export function CameraController({ isLoaded, target, onIntroComplete }) {
         if (target) {
             const targetChanged = !lastTarget.current || !lastTarget.current.equals(target);
             if (targetChanged) lastTarget.current = target.clone();
-            // Zapisz pozycję przed pierwszym fokusem
-            if (state.current !== 'FOCUSED') {
-                preFocusPos.current = camera.position.clone();
-            }
             state.current = 'FOCUSED';
 
             const direction = target.clone().normalize();
@@ -177,22 +156,13 @@ export function CameraController({ isLoaded, target, onIntroComplete }) {
             return;
         }
 
-        // ── POWRÓT Z FOCUS ────────────────────────────────────
-        // Wracamy do pozycji SPRZED kliknięcia (nie do endPos) —
-        // dzięki temu globus pokazuje ten sam region co przed kliknięciem.
+        // ── KONIEC FOKUSU (zamknięcie panelu) ─────────────────
+        // Zostawiamy kamerę przy kraju — powrót do preFocusPos walczył z OrbitControls
+        // (włączenie orbit w tej samej klatce co lerp) i dawało wrażenie „skoku” / starej pozycji.
         if (state.current === 'FOCUSED' && !target) {
-            const returnPos = preFocusPos.current || endPos;
-            const distToReturn = camera.position.distanceTo(returnPos);
-            if (distToReturn > 0.5) {
-                camera.position.lerp(returnPos, delta * settings.lerpSpeed * 0.4);
-                camera.lookAt(0, 0, 0);
-            } else {
-                camera.position.copy(returnPos);
-                camera.lookAt(0, 0, 0);
-                state.current = 'IDLE';
-                lastFocusPos.current = null;
-                preFocusPos.current = null;
-            }
+            state.current = 'IDLE';
+            lastFocusPos.current = null;
+            lastTarget.current = null;
         }
     });
 

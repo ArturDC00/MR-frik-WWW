@@ -12,6 +12,7 @@ import earcut from 'earcut';
 import { PORTS } from '../../constants/ports';
 import { PortMarker } from './PortMarker';
 import { AnimatedRoutes } from './AnimatedRoutes';
+import { detectPerfTier } from '../../utils/detectPerfTier';
 
 const TARGET_COUNTRIES = [
     "United States of America",
@@ -21,24 +22,6 @@ const TARGET_COUNTRIES = [
     "Poland",
     "Netherlands"
 ];
-
-// ============================================================
-// PERFORMANCE DETECTION - Wykrywa możliwości urządzenia
-// ============================================================
-function detectPerformanceTier() {
-    const cores = navigator.hardwareConcurrency || 2;
-    const memory = navigator.deviceMemory || 4;
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-    // LOW: < 4 cores OR < 4GB RAM OR mobile
-    if (cores < 4 || memory < 4 || isMobile) return 'LOW';
-
-    // MID: 4-8 cores, 4-8GB RAM
-    if (cores <= 8 && memory <= 8) return 'MID';
-
-    // HIGH: > 8 cores, > 8GB RAM
-    return 'HIGH';
-}
 
 // Quality settings per tier
 const QUALITY_PRESETS = {
@@ -155,6 +138,7 @@ function InstancedShips({ isActive, quality }) {
 // OPTIMIZED GLOBE - LOD + Instancing + Performance Detection
 // ============================================================
 export const ElegantGlobe = forwardRef(({
+    perfTier: perfTierProp,
     onSelect,
     onHover,
     activeGeometry,
@@ -168,8 +152,8 @@ export const ElegantGlobe = forwardRef(({
     const [geoData, setGeoData] = useState(null);
     const groupRef = useRef();
 
-    // Performance tier detection
-    const [perfTier] = useState(() => detectPerformanceTier());
+    const [fallbackPerfTier] = useState(() => detectPerfTier());
+    const perfTier = perfTierProp ?? fallbackPerfTier;
     const quality = QUALITY_PRESETS[perfTier];
 
     const worldLinesRef = useRef();
@@ -434,7 +418,7 @@ export const ElegantGlobe = forwardRef(({
 
             <StartLogoMarker />
 
-            <AnimatedRoutes show={isIntroDone} />
+            <AnimatedRoutes show={isIntroDone} perfTier={perfTier} />
 
             {/* INSTANCED SHIPS - 1 draw call zamiast 15 */}
             <InstancedShips isActive={isIntroDone} quality={perfTier} />

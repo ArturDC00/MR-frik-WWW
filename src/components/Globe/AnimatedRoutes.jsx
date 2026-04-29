@@ -1,22 +1,9 @@
-import React, { useRef, useMemo, useState } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ALL_ROUTES } from '../../constants/routes';
 import { latLngToVector3 } from '../../utils/math';
 import { GLOBE_RADIUS } from '../../constants/config';
-
-// ============================================================
-// PERFORMANCE DETECTION (sync with ElegantGlobe)
-// ============================================================
-function detectPerformanceTier() {
-    const cores = navigator.hardwareConcurrency || 2;
-    const memory = navigator.deviceMemory || 4;
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-    if (cores < 4 || memory < 4 || isMobile) return 'LOW';
-    if (cores <= 8 && memory <= 8) return 'MID';
-    return 'HIGH';
-}
 
 // Quality presets for routes
 const ROUTE_QUALITY = {
@@ -46,10 +33,9 @@ const ROUTE_QUALITY = {
 // ============================================================
 // OPTIMIZED ANIMATED ROUTES - Instanced + LOD
 // ============================================================
-export function AnimatedRoutes({ show }) {
+export function AnimatedRoutes({ show, perfTier }) {
     const meshRefs = useRef([]);
-    const [perfTier] = useState(() => detectPerformanceTier());
-    const quality = ROUTE_QUALITY[perfTier];
+    const quality = ROUTE_QUALITY[perfTier] ?? ROUTE_QUALITY.MID;
 
     // Generate route geometries ONCE with LOD
     const routes = useMemo(() => {

@@ -11,7 +11,7 @@ const nextConfig = {
 
     experimental: {
         // Mniejsze importy z barrel files — mniej kodu w bundlu klienta (TBT)
-        optimizePackageImports: ['framer-motion', '@react-three/drei'],
+        optimizePackageImports: ['framer-motion', '@react-three/drei', 'gsap', 'lenis'],
     },
 
     // Naprawia ostrzeżenie o wielu lockfiles w workspace

@@ -1,12 +1,35 @@
 'use client';
 
-import React from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { useEffect, useRef } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import { Preload, OrbitControls } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import { COLORS } from '../../constants/colors';
 import { ElegantGlobe } from './ElegantGlobe';
 import { CameraController } from './CameraController';
+
+/** Po zamknięciu panelu kraju — kilka invalidate pod rząd, żeby damping OrbitControls odrysował się przy frameloop `demand`. */
+function InvalidateAfterFocusClear({ focusPoint }) {
+    const invalidate = useThree((s) => s.invalidate);
+    const hadFocus = useRef(false);
+
+    useEffect(() => {
+        if (focusPoint) {
+            hadFocus.current = true;
+            return;
+        }
+        if (!hadFocus.current) return;
+        hadFocus.current = false;
+        let i = 0;
+        const id = setInterval(() => {
+            invalidate();
+            if (++i >= 10) clearInterval(id);
+        }, 20);
+        return () => clearInterval(id);
+    }, [focusPoint, invalidate]);
+
+    return null;
+}
 
 const StableOrbitControls = React.memo(function StableOrbitControls({
     onEnd,
@@ -39,6 +62,7 @@ const StableOrbitControls = React.memo(function StableOrbitControls({
  * Cały drzewo R3F — ładowane osobnym chunkiem (next/dynamic w App.jsx).
  */
 export default function WebGLCanvas({
+    perfTier,
     isLowPerf,
     isHighPerf,
     scrollProgress,
@@ -61,8 +85,8 @@ export default function WebGLCanvas({
 
     const orbitRotateSpeed = isLowPerf ? 0.65 : 0.5;
 
-    /** Pętla renderu: `never` zrywał damping OrbitControls; w hero zostawiamy `always`, niżej `demand` (oszczędność GPU). */
-    const frameMode = scrollProgress < 0.55 ? 'always' : 'demand';
+    /** `demand` dopiero gdy globus jest mocno zjedzony scrollem — płynniejszy orbit w widocznym hero (Lighthouse vs UX). */
+    const frameMode = scrollProgress < 0.68 ? 'always' : 'demand';
 
     return (
         <Canvas
@@ -76,10 +100,13 @@ export default function WebGLCanvas({
             }}
             camera={{ position: [0, 15, 80], fov: 42 }}
         >
+            <InvalidateAfterFocusClear focusPoint={focusPoint} />
+
             <CameraController
                 isLoaded={isLoaded}
                 target={focusPoint}
                 onIntroComplete={onIntroComplete}
+                perfTier={perfTier}
             />
 
             <ambientLight intensity={isLowPerf ? 0.4 : 0.15} />
@@ -99,6 +126,7 @@ export default function WebGLCanvas({
             )}
 
             <ElegantGlobe
+                perfTier={perfTier}
                 onSelect={onGlobeEvent}
                 onHover={(point, rot, e) => onGlobeEvent('HOVER', { point, rot, event: e })}
                 activeGeometry={activeGeometry}

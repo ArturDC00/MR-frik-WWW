@@ -346,28 +346,7 @@ function GlobeNavButtons({ show }) {
     );
 }
 
-// ============================================================
-// GLOBALNA DETEKCJA WYDAJNOŚCI — raz na session
-// Obejmuje: stare smartfony, low-end Androidy, małe ekrany
-// ============================================================
-function detectPerfTier() {
-    const cores = navigator.hardwareConcurrency || 2;
-    const memory = navigator.deviceMemory || 4;
-    const ua = navigator.userAgent;
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
-    const isSmallScreen = window.innerWidth < 768;
-    const prefersReduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    // LOW: mobile, mało zasobów, stary sprzęt, redukcja animacji
-    if (isMobile || isSmallScreen || prefersReduced || cores < 4 || memory < 4) {
-        return 'LOW';
-    }
-    // HIGH: 8+ rdzeni i 8+ GB RAM
-    if (cores >= 8 && memory >= 8) {
-        return 'HIGH';
-    }
-    // MID: wszystko pomiędzy (4–7 rdzeni lub 4–7 GB RAM)
-    return 'MID';
-}
+import { detectPerfTier } from './utils/detectPerfTier';
 
 export default function App() {
     const [loading, setLoading] = useState(0);
@@ -623,6 +602,7 @@ export default function App() {
                     transition: globeVisible ? 'opacity 1.2s ease-out' : 'none',
                 }}>
                     <WebGLCanvas
+                        perfTier={perfTier}
                         isLowPerf={isLowPerf}
                         isHighPerf={isHighPerf}
                         scrollProgress={scrollProgress}
