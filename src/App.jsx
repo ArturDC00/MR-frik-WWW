@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, startTransition } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo, startTransition } from 'react';
 import dynamic from 'next/dynamic';
 import { AnimatePresence } from 'framer-motion';
-import * as THREE from 'three';
+import { Vector3 } from 'three';
 
 // ============ SEKCJE - LAZY (ładowane dopiero gdy potrzebne) ============
 const ProcessSection = lazy(() => import('./components/Sections/ProcessSection').then(m => ({ default: m.ProcessSection })));
@@ -29,18 +29,29 @@ const WebGLCanvas = dynamic(() => import('./components/Globe/WebGLCanvas'), {
     loading: () => <StaticHeroPlaceholder />,
 });
 
+/** Osobne chunki — mniej pracy na starcie (TBT); bez zmiany logiki scrolla / globusa. */
+const CustomCursor = dynamic(
+    () => import('./components/UI/CustomCursor').then((m) => ({ default: m.CustomCursor })),
+    { ssr: false }
+);
+const CookieConsent = dynamic(
+    () => import('./components/UI/CookieConsent').then((m) => ({ default: m.CookieConsent })),
+    { ssr: false }
+);
+const AmbientSound = dynamic(
+    () => import('./components/Audio/AmbientSound').then((m) => ({ default: m.AmbientSound })),
+    { ssr: false }
+);
+
 // ============ UI COMPONENTS ============
 import { Loader } from './components/UI/Loader';
 import { Tooltip } from './components/UI/Tooltip';
 import { InfoPanel } from './components/UI/InfoPanel';
 import { HeroContent } from './components/UI/HeroContent';
-import { AmbientSound } from './components/Audio/AmbientSound';
 // import { Navbar } from './components/UI/Navbar';
 
 // ============ EFEKTY ============
-import { CustomCursor } from './components/UI/CustomCursor';
 import { StarField } from './components/Effects/FilmGrain';
-import { CookieConsent } from './components/UI/CookieConsent';
 
 const GLOBE_RADIUS = 32;
 
@@ -360,6 +371,11 @@ export default function App() {
     const isLowPerf = perfTier === 'LOW';
     const isHighPerf = perfTier === 'HIGH';
 
+    const showFinePointerCursor = useMemo(
+        () => typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches,
+        []
+    );
+
     const [geoDataRef, setGeoDataRef] = useState(null);
     const [selectedData, setSelectedData] = useState(null);
     const [activeGeometry, setActiveGeometry] = useState(null);
@@ -454,7 +470,7 @@ export default function App() {
             const corrected = point.clone();
             // Normalizacja kąta do [-π, π] zapobiega akumulacji float przy długiej sesji
             const normalizedRot = rot - Math.round(rot / (2 * Math.PI)) * (2 * Math.PI);
-            corrected.applyAxisAngle(new THREE.Vector3(0, 1, 0), -normalizedRot);
+            corrected.applyAxisAngle(new Vector3(0, 1, 0), -normalizedRot);
             // Hitbox sphere ma radius GLOBE_RADIUS+0.5 — używamy rzeczywistego promienia punktu
             // aby acos(y/r) był dokładny (bez tego błąd ~1° szerokości geograficznej)
             const hitRadius = Math.sqrt(corrected.x ** 2 + corrected.y ** 2 + corrected.z ** 2);
@@ -553,7 +569,7 @@ export default function App() {
 
     return (
         <>
-            <CustomCursor />
+            {showFinePointerCursor && <CustomCursor />}
             <CookieConsent />
 
             {/* Navbar - widoczny na hero, znika przy scrollu */}
