@@ -128,7 +128,7 @@ export function CustomCursor() {
         border: isHovering ? `2px solid ${accentColor}` : 'none',
         borderRadius: '50%',
         pointerEvents: 'none',
-        zIndex: 9999,
+        zIndex: 10070,
         opacity: isVisible ? 1 : 0,
         transition: 'width 0.3s ease, height 0.3s ease, background 0.3s ease'
     };
@@ -142,7 +142,7 @@ export function CustomCursor() {
         border: isHovering ? `2px solid ${accentColor}` : '2px solid rgba(255,255,255,0.3)',
         borderRadius: '50%',
         pointerEvents: 'none',
-        zIndex: 9998,
+        zIndex: 10069,
         opacity: isVisible ? 1 : 0,
         transition: 'width 0.5s ease, height 0.5s ease, border-color 0.3s ease'
     };

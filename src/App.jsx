@@ -1,9 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, startTransition } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { Preload } from '@react-three/drei';
-import { EffectComposer, Bloom } from '@react-three/postprocessing';
+import dynamic from 'next/dynamic';
 import { AnimatePresence } from 'framer-motion';
 import * as THREE from 'three';
 
@@ -19,15 +17,17 @@ const ContactSection = lazy(() => import('./components/Sections/ContactSection')
 const PlatformSection = lazy(() => import('./components/Sections/Platformsection').then(m => ({ default: m.PlatformSection })));
 
 // ============ UTILS & STYLES ============
-import { COLORS } from './constants/colors';
 import { vector3ToLatLng, latLngToVector3 } from './utils/math';
 import { isPointInPolygon } from './utils/geography';
 import { SmoothScroll } from './utils/SmoothScroll';
 
-// ============ GLOBE COMPONENTS ============
-import { ElegantGlobe } from './components/Globe/ElegantGlobe';
-import { CameraController } from './components/Globe/CameraController';
-import { OrbitControls } from '@react-three/drei';
+// ============ GLOBE — osobny chunk (Three.js / R3F / postprocessing) ============
+import { StaticHeroPlaceholder } from './components/UI/StaticHeroPlaceholder';
+
+const WebGLCanvas = dynamic(() => import('./components/Globe/WebGLCanvas'), {
+    ssr: false,
+    loading: () => <StaticHeroPlaceholder />,
+});
 
 // ============ UI COMPONENTS ============
 import { Loader } from './components/UI/Loader';
@@ -84,23 +84,6 @@ function SectionFallback() {
         }} />
     );
 }
-
-// ============================================================
-// ORBIT CONTROLS - memoized, żeby nie reconnectował przy każdym re-renderze App
-// ============================================================
-const StableOrbitControls = React.memo(function StableOrbitControls({ onEnd }) {
-    return (
-        <OrbitControls
-            enableRotate={true}
-            enableZoom={false}
-            enablePan={false}
-            minDistance={50}
-            maxDistance={150}
-            rotateSpeed={0.5}
-            onEnd={onEnd}
-        />
-    );
-});
 
 // ============================================================
 // PRZYCISKI NAWIGACYJNE NA GLOBUSIE
@@ -194,12 +177,13 @@ function GlobeNavButtons({ show }) {
                 }
 
                 /* ── FLOATING ACTION BUTTON (mobile only) ── */
+                /* Nad warstwą hero (10020), pod cookies (10080) */
                 .gnb-fab {
                     display: none;
                     position: fixed;
                     bottom: max(28px, env(safe-area-inset-bottom, 28px));
                     right: 20px;
-                    z-index: 100;
+                    z-index: 10070;
                     width: 54px;
                     height: 54px;
                     border-radius: 50%;
@@ -228,7 +212,7 @@ function GlobeNavButtons({ show }) {
                 .gnb-overlay {
                     position: fixed;
                     inset: 0;
-                    z-index: 99;
+                    z-index: 10045;
                     background: rgba(2,2,3,0.75);
                     backdrop-filter: blur(16px);
                     -webkit-backdrop-filter: blur(16px);
@@ -458,9 +442,6 @@ export default function App() {
             setScrollProgress(prev =>
                 Math.abs(newProgress - prev) > 0.003 ? newProgress : prev
             );
-            if (newProgress > 0.15) {
-                setGlobeAutoSpinPaused(false);
-            }
         };
         const onLenis = (e) => update(e.detail);
         const onScroll = () => update(window.scrollY);
@@ -627,112 +608,56 @@ export default function App() {
                 }} />
 
                 {/* ✅ GLOBUS */}
-                <div style={{
+                <div
+                    data-lenis-prevent
+                    style={{
                     position: 'fixed',
                     top: 0, left: 0,
                     width: '100vw', height: '100vh',
                     zIndex: 2,
                     pointerEvents: scrollProgress > 0.3 ? 'none' : 'auto',
-                    // pan-y: przeglądarka obsługuje scroll pionowy, canvas dostaje poziome gesty
-                    touchAction: 'pan-y',
+                    touchAction: isLowPerf ? 'none' : 'pan-y',
                     // ✅ globeVisible: opóźnione fade-in chroni przed żółtym rozbłyskiem Bloom
                     opacity: globeVisible ? Math.max(0, 1 - scrollProgress * 1.5) : 0,
                     transition: globeVisible ? 'opacity 1.2s ease-out' : 'none',
                 }}>
-                    <Canvas
-                        style={{ touchAction: 'pan-y' }}
-                        // ✅ Niższy DPR na słabych urządzeniach — mniej pikseli do przerysowania
-                        dpr={isLowPerf ? [0.75, 1] : isHighPerf ? [1, 1.5] : [1, 1.25]}
-                        frameloop={scrollProgress < 0.4 ? 'always' : 'never'}
-                        gl={{
-                            // ✅ Bez antialiasingu na mobilce — Bloom i tak wygładza
-                            antialias: !isLowPerf,
-                            powerPreference: 'high-performance',
-                            preserveDrawingBuffer: false
-                        }}
-                        camera={{ position: [0, 15, 80], fov: 42 }}
-                    >
-                        <CameraController
-                            isLoaded={isLoaded}
-                            target={focusPoint}
-                            onIntroComplete={() => setIntroDone(true)}
-                            orbitControlsActive={!focusPoint && introDone && scrollProgress < 0.05}
-                        />
-
-                        {/* LOW: ambient + 1 point
-                            MID: +2 point lights
-                            HIGH: pełny zestaw (5 świateł + 2 spoty) */}
-                        <ambientLight intensity={isLowPerf ? 0.4 : 0.15} />
-                        <pointLight position={[100, 50, 100]} intensity={isLowPerf ? 2.0 : 2.5} color="#ffffff" />
-                        {!isLowPerf && (
-                            <>
-                                <pointLight position={[-100, 0, 50]} intensity={3.0} color={COLORS.gradientStart} />
-                                <pointLight position={[0, 100, -50]} intensity={2.0} color="#ffffff" />
-                                {isHighPerf && (
-                                    <>
-                                        <pointLight position={[50, -80, 80]} intensity={1.8} color={COLORS.gradientEnd} />
-                                        <spotLight position={[0, 150, 0]} intensity={2.5} angle={0.5} penumbra={1} color="#4a90e2" />
-                                        <spotLight position={[-150, -50, 100]} intensity={2.0} angle={0.6} penumbra={0.8} color={COLORS.gradientEnd} />
-                                    </>
-                                )}
-                            </>
-                        )}
-
-                        <ElegantGlobe
-                            onSelect={handleGlobeEvent}
-                            onHover={(point, rot, e) => handleGlobeEvent('HOVER', { point, rot, event: e })}
-                            activeGeometry={activeGeometry}
-                            hoverGeometry={hoverGeometry}
-                            globeRotation={globeRotation}
-                            isIntroDone={introDone}
-                            pauseAutoRotate={
-                                globeAutoSpinPaused ||
-                                Boolean(hoverGeometry) ||
-                                Boolean(activeGeometry) ||
-                                Boolean(focusPoint)
-                            }
-                        />
-
-                        {!focusPoint && introDone && scrollProgress < 0.05 && (
-                            <StableOrbitControls onEnd={onOrbitInteractionEnd} />
-                        )}
-
-                        {/* LOW: brak post-processingu
-                            MID/HIGH: Bloom (hardware AA wystarczy — SMAA usunięte:
-                            powodowało "Constructor requires new operator" przez new Image() w SMAAEffect) */}
-                        {!isLowPerf && (
-                            <EffectComposer disableNormalPass multisampling={0}>
-                                <Bloom
-                                    luminanceThreshold={0.1}
-                                    mipmapBlur
-                                    intensity={isHighPerf ? 0.8 : 0.4}
-                                    radius={isHighPerf ? 0.6 : 0.3}
-                                />
-                            </EffectComposer>
-                        )}
-
-                        <Preload all />
-                    </Canvas>
+                    <WebGLCanvas
+                        isLowPerf={isLowPerf}
+                        isHighPerf={isHighPerf}
+                        scrollProgress={scrollProgress}
+                        introDone={introDone}
+                        isLoaded={isLoaded}
+                        focusPoint={focusPoint}
+                        onIntroComplete={() => setIntroDone(true)}
+                        onGlobeEvent={handleGlobeEvent}
+                        onOrbitInteractionEnd={onOrbitInteractionEnd}
+                        activeGeometry={activeGeometry}
+                        hoverGeometry={hoverGeometry}
+                        globeRotation={globeRotation}
+                        globeAutoSpinPaused={globeAutoSpinPaused}
+                        hasHoverGeometry={Boolean(hoverGeometry)}
+                        hasActiveGeometry={Boolean(activeGeometry)}
+                        hasFocusPoint={Boolean(focusPoint)}
+                    />
                 </div>
 
-                {/* ✅ LOADER — poza divem z opacity, żeby iOS scroll restoration go nie ukrył */}
-                <Loader progress={loading} onComplete={() => setIsLoaded(true)} />
+                {/* ✅ LOADER — nad hero do końca animacji; potem isLoaded → null (strona widoczna) */}
+                <Loader progress={loading} onComplete={() => setIsLoaded(true)} isLoaded={isLoaded} />
 
-                {/* UI LAYER */}
+                {/* UI LAYER — pod loaderem do momentu isLoaded; potem pełny hero */}
                 <div style={{
                     position: 'relative',
-                    zIndex: 10,
+                    zIndex: 10020,
                     pointerEvents: 'none',
                     opacity: Math.max(0, 1 - scrollProgress * 2),
                     transition: 'opacity 0.3s ease'
                 }}>
                     <div style={{ height: '100vh', position: 'relative' }}>
-                        {introDone && (
-                            <HeroContent
-                                scrollProgress={scrollProgress}
-                                isGlobeInteracting={isGlobeInteracting}
-                            />
-                        )}
+                        <HeroContent
+                            scrollProgress={scrollProgress}
+                            isGlobeInteracting={isGlobeInteracting}
+                            introDone={introDone}
+                        />
                     </div>
 
                     {hoverName && !selectedData && introDone && (

@@ -49,7 +49,7 @@ const CAMERA_SETTINGS = {
 // IDLE    → ScrollytellingController przejmuje kontrolę
 // FOCUSED → użytkownik kliknął kraj/port
 
-export function CameraController({ isLoaded, target, onIntroComplete, orbitControlsActive = false }) {
+export function CameraController({ isLoaded, target, onIntroComplete }) {
     const { camera } = useThree();
     const state = useRef('INIT');
     const time = useRef(0);
@@ -143,11 +143,10 @@ export function CameraController({ isLoaded, target, onIntroComplete, orbitContr
         }
 
         // ── IDLE ──────────────────────────────────────────────
-        // Gdy działa OrbitControls, NIE nadpisuj lookAt co klatkę — wtedy „wraca” widok do centrum.
+        // Nie wywołuj lookAt(0,0,0) w pętli — po wyłączeniu OrbitControls (np. lekki scroll)
+        // wymuszanie lookAt „szarpało” kamerę z powrotem ku domyślnemu kadrowi (USA/środek).
+        // Zachowujemy pozę z OrbitControls / po powrocie z fokusu; intro i FOCUSED ustawiają kadr osobno.
         if (state.current === 'IDLE' && !target) {
-            if (!orbitControlsActive) {
-                camera.lookAt(0, 0, 0);
-            }
             return;
         }
 

@@ -23,7 +23,7 @@ export function Tooltip({ name, x, y }) {
                 fontSize: '15px',
                 fontWeight: '700',
                 pointerEvents: 'none',
-                zIndex: 10000,
+                zIndex: 10050,
                 backdropFilter: 'blur(20px)',
                 boxShadow: `0 0 40px ${COLORS.gradientEnd}80, 0 8px 20px rgba(0,0,0,0.6)`,
                 whiteSpace: 'nowrap',

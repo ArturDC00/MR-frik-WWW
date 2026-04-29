@@ -7,6 +7,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
     reactStrictMode: false, // R3F/GSAP nie lubią strict mode (double-invoke effects)
 
+    experimental: {
+        // Mniejsze importy z barrel files — mniej kodu w bundlu klienta (TBT)
+        optimizePackageImports: ['framer-motion', '@react-three/drei'],
+    },
+
     // Naprawia ostrzeżenie o wielu lockfiles w workspace
     outputFileTracingRoot: __dirname,
 
@@ -60,6 +65,18 @@ const nextConfig = {
             {
                 // Statyczne assety — długi cache
                 source: '/Photo/(.*)',
+                headers: [
+                    { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+                ],
+            },
+            {
+                source: '/fonts/(.*)',
+                headers: [
+                    { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+                ],
+            },
+            {
+                source: '/models/(.*)',
                 headers: [
                     { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
                 ],

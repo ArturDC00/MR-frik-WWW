@@ -1,7 +1,8 @@
 import './globals.css';
-import Script from 'next/script';
+import './ui-overrides.css';
 import { siteUrl } from '../config/site';
 import { ImportCountProvider } from '../components/Providers/ImportCountProvider';
+import { BitrixChatScript } from '../components/Providers/BitrixChatScript';
 
 export const viewport = {
     width: 'device-width',
@@ -263,11 +264,24 @@ export default function RootLayout({ children }) {
     return (
         <html lang="pl">
             <head>
-                {/* Inter + Monument Extended — self-hosted via globals.css @font-face (GDPR safe, zero external requests) */}
+                {/* Inter — krytyczny font (body, hero); preload skraca łańcuch krytyczny względem samego @font-face w CSS */}
+                <link
+                    rel="preload"
+                    href="/fonts/inter-latin.woff2"
+                    as="font"
+                    type="font/woff2"
+                    crossOrigin="anonymous"
+                />
+                {/* Polskie znaki diakrytyczne w podtytule / treściach */}
+                <link
+                    rel="preload"
+                    href="/fonts/inter-latin-ext.woff2"
+                    as="font"
+                    type="font/woff2"
+                    crossOrigin="anonymous"
+                />
 
-                {/* Preconnect Unsplash — obrazy w ValuesSection, FAQSection */}
-                <link rel="preconnect" href="https://images.unsplash.com" />
-                <link rel="dns-prefetch" href="https://images.unsplash.com" />
+                {/* Inter + Monument Extended — pełne @font-face w globals.css */}
 
                 {/* JSON-LD Structured Data — krytyczne dla SEO/GEO/AI search */}
                 <script
@@ -277,13 +291,7 @@ export default function RootLayout({ children }) {
             </head>
             <body>
             <ImportCountProvider>{children}</ImportCountProvider>
-            <Script
-                id="bitrix24-crm"
-                strategy="lazyOnload"
-                dangerouslySetInnerHTML={{
-                    __html: `(function(w,d,u){var s=d.createElement('script');s.async=true;s.src=u+'?'+(Date.now()/60000|0);var h=d.getElementsByTagName('script')[0];h.parentNode.insertBefore(s,h);})(window,document,'https://cdn.bitrix24.pl/b33619119/crm/site_button/loader_3_ow2viz.js');`,
-                }}
-            />
+            <BitrixChatScript />
         </body>
         </html>
     );

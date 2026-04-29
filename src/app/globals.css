@@ -1,3 +1,6 @@
+/* MrFrik — krytyczny CSS pierwszego paintu: @font-face, reset, Lenis, reduced-motion.
+   Dekoracja (scrollbar, Bitrix, pulse) → ui-overrides.css */
+
 /* Inter — self-hosted WOFF2 variable font (GDPR safe, zero external requests) */
 /* latin-ext: Polish diacritics (ą, ę, ó, ź, ż, ń, ć, ś, ł) */
 @font-face {
@@ -111,48 +114,7 @@ body {
     width: 100%;
 }
 
-@keyframes pulse-dot {
-    0% {
-        transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(229, 127, 77, 0.7);
-    }
-    70% {
-        transform: scale(1);
-        box-shadow: 0 0 0 6px rgba(229, 127, 77, 0);
-    }
-    100% {
-        transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(229, 127, 77, 0);
-    }
-}
-
-.pulsing-dot {
-    animation: pulse-dot 2s infinite;
-}
-
-::-webkit-scrollbar {
-    width: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: #020203;
-}
-
-::-webkit-scrollbar-thumb {
-    background: #333;
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #555;
-}
-
-/* ── Hide ambient sound button on mobile (conflicts with nav FAB) ── */
-@media (max-width: 767px) {
-    .ambient-sound-btn {
-        display: none !important;
-    }
-}
+/* Dekoracja, scrollbar, Bitrix — ui-overrides.css (import w layout) */
 
 /* ── prefers-reduced-motion: wyłącz wszystkie animacje CSS ── */
 @media (prefers-reduced-motion: reduce) {
@@ -164,15 +126,4 @@ body {
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
     }
-}
-
-/* Bitrix24 — przycisk czatu na lewo (domyślnie prawa strona) */
-.b24-widget-button-wrapper,
-.b24-widget-button-position-bottom-right {
-    right: auto !important;
-    left: max(12px, env(safe-area-inset-left, 0px)) !important;
-}
-
-.b24-widget-button-position-bottom-left {
-    left: max(12px, env(safe-area-inset-left, 0px)) !important;
 }

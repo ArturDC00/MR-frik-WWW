@@ -140,7 +140,7 @@ export function InfoPanel({ data, onClose }) {
                 position: 'fixed',
                 bottom: '32px',
                 right: '24px',
-                zIndex: 200,
+                zIndex: 10040,
                 pointerEvents: 'auto',
             }}>
                 <motion.div

@@ -1,15 +1,14 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const STORAGE_KEY = 'mrfrik_cookie_consent';
+import { COOKIE_CONSENT_STORAGE_KEY, COOKIE_CONSENT_ACCEPTED_EVENT } from '../../constants/cookieConsent';
 
 export function CookieConsent() {
     const [visible, setVisible] = useState(false);
 
     useEffect(() => {
         try {
-            const saved = localStorage.getItem(STORAGE_KEY);
+            const saved = localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY);
             if (!saved) setVisible(true);
         } catch {
             setVisible(true);
@@ -17,12 +16,23 @@ export function CookieConsent() {
     }, []);
 
     const accept = () => {
-        try { localStorage.setItem(STORAGE_KEY, 'accepted'); } catch { /* noop */ }
+        try {
+            localStorage.setItem(COOKIE_CONSENT_STORAGE_KEY, 'accepted');
+        } catch {
+            /* noop */
+        }
         setVisible(false);
+        window.dispatchEvent(
+            new CustomEvent(COOKIE_CONSENT_ACCEPTED_EVENT, { detail: { accepted: true } }),
+        );
     };
 
     const decline = () => {
-        try { localStorage.setItem(STORAGE_KEY, 'declined'); } catch { /* noop */ }
+        try {
+            localStorage.setItem(COOKIE_CONSENT_STORAGE_KEY, 'declined');
+        } catch {
+            /* noop */
+        }
         setVisible(false);
     };
 
@@ -43,7 +53,7 @@ export function CookieConsent() {
                         bottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
                         left: '50%',
                         transform: 'translateX(-50%)',
-                        zIndex: 9998,
+                        zIndex: 10080,
                         width: 'min(640px, calc(100vw - 24px))',
                         maxHeight: 'min(78dvh, calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px))',
                         overflowY: 'auto',
