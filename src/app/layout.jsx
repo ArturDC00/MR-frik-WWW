@@ -264,15 +264,15 @@ export default function RootLayout({ children }) {
     return (
         <html lang="pl">
             <head>
-                {/* Inter — krytyczny font (body, hero); preload skraca łańcuch krytyczny względem samego @font-face w CSS */}
+                {/* Inter — preload w <head> + fetchPriority: wcześniejszy start niż @font-face z CSS (LCP) */}
                 <link
                     rel="preload"
                     href="/fonts/inter-latin.woff2"
                     as="font"
                     type="font/woff2"
                     crossOrigin="anonymous"
+                    fetchPriority="high"
                 />
-                {/* Polskie znaki diakrytyczne w podtytule / treściach */}
                 <link
                     rel="preload"
                     href="/fonts/inter-latin-ext.woff2"
@@ -280,6 +280,7 @@ export default function RootLayout({ children }) {
                     type="font/woff2"
                     crossOrigin="anonymous"
                 />
+                {/* Brak preconnect do images.unsplash.com — obrazy idą przez next/image; zbędny preconnect = ostrzeżenie Lighthouse */}
 
                 {/* Inter + Monument Extended — pełne @font-face w globals.css */}
 

@@ -100,6 +100,7 @@ export default function WebGLCanvas({
                 globeRotation={globeRotation}
                 isIntroDone={introDone}
                 pauseAutoRotate={pauseAutoRotate}
+                enableGeoFetch={isLoaded}
             />
 
             {!focusPoint && introDone && (

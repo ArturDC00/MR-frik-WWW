@@ -162,6 +162,8 @@ export const ElegantGlobe = forwardRef(({
     globeRotation,
     isIntroDone,
     pauseAutoRotate = false,
+    /** false = nie pobieraj world.geojson (odkłada ~200 KB z krytycznej ścieżki aż np. hero/LCP) */
+    enableGeoFetch = true,
 }, ref) => {
     const [geoData, setGeoData] = useState(null);
     const groupRef = useRef();
@@ -204,7 +206,9 @@ export const ElegantGlobe = forwardRef(({
     }, []);
 
     useEffect(() => {
-        fetch('/world.geojson')
+        if (!enableGeoFetch) return undefined;
+        const ac = new AbortController();
+        fetch('/world.geojson', { signal: ac.signal })
             .then(res => res.json())
             .then(data => {
                 // ✅ Przekaż dane do App zanim zaczniemy ciężkie przetwarzanie earcut
@@ -212,8 +216,12 @@ export const ElegantGlobe = forwardRef(({
                 // ✅ startTransition: earcut w useMemo odpali się w trybie concurrent
                 // → React może yieldować między frames zamiast blokować główny wątek
                 startTransition(() => setGeoData(data));
+            })
+            .catch((e) => {
+                if (e?.name === 'AbortError') return;
             });
-    }, []); // ✅ Empty deps — fetched only once, no infinite loop
+        return () => ac.abort();
+    }, [enableGeoFetch]); // enableGeoFetch: jednorazowy start po odblokowaniu (np. isLoaded)
 
     // Optimized geometry generation with LOD
     const { worldLines, targetLines, targetGeometries } = useMemo(() => {

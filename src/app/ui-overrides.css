@@ -42,6 +42,32 @@
     }
 }
 
+/* Launcher — ten sam róg co widget Bitrix (skrypt dopiero po kliknięciu) */
+.bitrix-chat-launcher {
+    position: fixed;
+    z-index: 10001;
+    left: max(12px, env(safe-area-inset-left, 0px));
+    bottom: max(20px, env(safe-area-inset-bottom, 0px));
+    padding: 10px 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(5, 8, 15, 0.75);
+    color: rgba(255, 255, 255, 0.92);
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.bitrix-chat-launcher:disabled {
+    cursor: wait;
+    opacity: 0.85;
+}
+
 /* Bitrix24 — przycisk czatu na lewo (domyślnie prawa strona); ładuje się po skrypcie */
 .b24-widget-button-wrapper,
 .b24-widget-button-position-bottom-right {

@@ -1,7 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { COOKIE_CONSENT_STORAGE_KEY, COOKIE_CONSENT_ACCEPTED_EVENT } from '../../constants/cookieConsent';
+import {
+    COOKIE_CONSENT_STORAGE_KEY,
+    COOKIE_CONSENT_ACCEPTED_EVENT,
+    COOKIE_CONSENT_ALL,
+    COOKIE_CONSENT_NECESSARY,
+} from '../../constants/cookieConsent';
 
 export function CookieConsent() {
     const [visible, setVisible] = useState(false);
@@ -17,19 +22,21 @@ export function CookieConsent() {
 
     const accept = () => {
         try {
-            localStorage.setItem(COOKIE_CONSENT_STORAGE_KEY, 'accepted');
+            localStorage.setItem(COOKIE_CONSENT_STORAGE_KEY, COOKIE_CONSENT_ALL);
         } catch {
             /* noop */
         }
         setVisible(false);
         window.dispatchEvent(
-            new CustomEvent(COOKIE_CONSENT_ACCEPTED_EVENT, { detail: { accepted: true } }),
+            new CustomEvent(COOKIE_CONSENT_ACCEPTED_EVENT, {
+                detail: { accepted: true, marketing: true },
+            }),
         );
     };
 
     const decline = () => {
         try {
-            localStorage.setItem(COOKIE_CONSENT_STORAGE_KEY, 'declined');
+            localStorage.setItem(COOKIE_CONSENT_STORAGE_KEY, COOKIE_CONSENT_NECESSARY);
         } catch {
             /* noop */
         }
@@ -143,6 +150,11 @@ export function CookieConsent() {
                             <a href="/polityka-prywatnosci" className="cc-link">Polityce Prywatności</a>.
                         </p>
                     </div>
+
+                    <p className="cc-text" style={{ fontSize: '12px', opacity: 0.78, margin: 0 }}>
+                        „Akceptuj wszystkie” obejmuje m.in. widget czatu online (Bitrix24) — skrypt ładuje się dopiero po
+                        kliknięciu „Czat online”. „Tylko niezbędne” wyłącza marketing i czat.
+                    </p>
 
                     <div className="cc-actions">
                         <button className="cc-btn-accept" onClick={accept} autoFocus>

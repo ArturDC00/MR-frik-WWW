@@ -9,18 +9,17 @@ export function AmbientSound({ play }) {
     const fadeInRef = useRef(null);
     const fadeOutRef = useRef(null);
 
-    // Inicjalizacja audio — tylko raz
+    // Audio dopiero po pierwszym kliknięciu „Sound On” — unikamy ~3 MB w sieci przy LCP / payload
     useEffect(() => {
-        const audio = new Audio('/Audio/the_mountain-space-438391.mp3');
-        audio.loop = true;
-        audio.volume = 0;
-        audioRef.current = audio;
-
         return () => {
             clearInterval(fadeInRef.current);
             clearInterval(fadeOutRef.current);
-            audio.pause();
-            audio.src = '';
+            const a = audioRef.current;
+            if (a) {
+                a.pause();
+                a.src = '';
+                audioRef.current = null;
+            }
         };
     }, []);
 
@@ -35,8 +34,13 @@ export function AmbientSound({ play }) {
     };
 
     const fadeIn = () => {
-        const audio = audioRef.current;
-        if (!audio) return;
+        let audio = audioRef.current;
+        if (!audio) {
+            audio = new Audio('/Audio/the_mountain-space-438391.mp3');
+            audio.loop = true;
+            audio.volume = 0;
+            audioRef.current = audio;
+        }
         clearFades();
         audio.volume = 0;
         audio.play().then(() => {
