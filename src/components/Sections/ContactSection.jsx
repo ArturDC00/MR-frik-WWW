@@ -340,8 +340,11 @@ export function ContactSection() {
                         src={LOGO_PATH}
                         alt="MrFrik — Import Samochodów z USA i Kanady do Polski"
                         className="cs-logo"
-                        width={3508}
-                        height={2481}
+                        /* LOGO_PATH to plik 560×396. Zadeklarowane 3508×2481 (wymiary INNEGO,
+                           nieużywanego pliku) kazały next/image generować srcset do 3840w
+                           z upscalingiem źródła 560 px. */
+                        width={560}
+                        height={396}
                         sizes="(max-width: 640px) 55vw, 30vw"
                         draggable={false}
                         quality={90}

@@ -24,6 +24,7 @@
     "start": "next start",
     "lint": "next lint",
     "optimize": "node scripts/optimize.mjs",
+    "slim-geojson": "node scripts/slim-geojson.mjs",
     "resize-hero-logo": "node scripts/resize-hero-logo.mjs",
     "subset-fonts": "bash scripts/subset-monument.sh"
   },

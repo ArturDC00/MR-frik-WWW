@@ -28,6 +28,13 @@ const nextConfig = {
 
     // GLB/GLTF i inne statyczne assety
     webpack(config) {
+        // n8ao (tranzytywnie z @react-three/postprocessing) wnosi 86 KB raw / 65 KB gz
+        // base64 tekstury BlueNoise, której webpack nie umie wyciąć, a efekt <N8AO>
+        // nie jest tu nigdy renderowany. Patrz src/stubs/n8ao.js.
+        config.resolve.alias = {
+            ...(config.resolve.alias || {}),
+            n8ao: path.resolve(__dirname, 'src/stubs/n8ao.js'),
+        };
         config.module.rules.push({
             test: /\.(glb|gltf)$/,
             type: 'asset/resource',

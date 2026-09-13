@@ -19,7 +19,10 @@ const faqData = [
         id: 3,
         question: "Jak długo trwa sprowadzenie samochodu?",
         answer: "Średni czas importu auta zza oceanu wynosi od 6 do 10 tygodni, w zależności od miejsca zakupu, dostępności transportu i odprawy celnej. Na bieżąco informujemy Cię o każdym etapie – od zakupu, przez transport, aż po dostarczenie auta do Polski.",
-        image: "/Photo/Baza wiedzy/Jak długo trwa… .webp"
+        // Nazwa ASCII celowo: przy "Jak długo trwa… .webp" /_next/image zwracało HTTP 400
+        // (ł + wielokropek), więc ten obrazek NIGDY się nie renderował i był pobierany
+        // od nowa przy każdej wizycie. Spacje same w sobie są OK — problemem były znaki nie-ASCII.
+        image: "/Photo/Baza wiedzy/jak-dlugo-trwa.webp"
     },
     {
         id: 4,

@@ -5,3 +5,6 @@ Archiwum.zip
 *.zip
 *.tar.gz
 .git
+
+# Źródła obrazów/fontów do regeneracji — nieserwowane, 93 MB. Patrz assets/README.md
+assets

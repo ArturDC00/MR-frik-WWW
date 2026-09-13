@@ -1,6 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { COLORS } from '../../constants/colors';
 
+const ACCENT = COLORS?.gradientEnd || '#4a90e2';
+
+/**
+ * Stany kursora jako klasy CSS zamiast stanu Reacta — wartości i przejścia 1:1 jak w dawnych
+ * stylach inline. Zmiana „najechany / nie” przełącza klasę bezpośrednio na elemencie, więc
+ * komponent po zamontowaniu w ogóle się nie przerenderowuje.
+ *
+ * `border` kropki nie jest w transition (jak wcześniej) — przełącza się natychmiast;
+ * `opacity` też nie była animowana.
+ */
+const CURSOR_CSS = `
+.cc-dot, .cc-ring { position: fixed; top: 0; left: 0; border-radius: 50%; pointer-events: none; }
+.cc-dot {
+    width: 8px; height: 8px; background: ${ACCENT}; border: none; z-index: 10070;
+    transition: width 0.3s ease, height 0.3s ease, background 0.3s ease;
+}
+.cc-dot.cc-hot { width: 40px; height: 40px; background: rgba(253, 151, 49, 0.3); border: 2px solid ${ACCENT}; }
+.cc-ring {
+    width: 40px; height: 40px; border: 2px solid rgba(255,255,255,0.3); z-index: 10069;
+    transition: width 0.5s ease, height 0.5s ease, border-color 0.3s ease;
+}
+.cc-ring.cc-hot { width: 60px; height: 60px; border: 2px solid ${ACCENT}; }
+.cc-dot.cc-hidden, .cc-ring.cc-hidden { opacity: 0; }
+`;
+
 export function CustomCursor() {
     const [isTouchDevice] = useState(() =>
         typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
@@ -8,8 +33,7 @@ export function CustomCursor() {
 
     const dotRef = useRef(null);
     const ringRef = useRef(null);
-    const [isHovering, setIsHovering] = useState(false);
-    const [isVisible, setIsVisible] = useState(true);
+    const hotRef = useRef(false);
 
     const mousePos = useRef({ x: 0, y: 0 });
     const dotPos = useRef({ x: 0, y: 0 });
@@ -17,41 +41,61 @@ export function CustomCursor() {
     const magneticTarget = useRef(null);
 
     const magneticElementsCache = useRef([]);
-    const lastCacheTime = useRef(0);
 
     useEffect(() => {
-        if (isTouchDevice) return;
+        if (isTouchDevice) return undefined;
         const refreshCache = () => {
             magneticElementsCache.current = [...document.querySelectorAll('[data-magnetic]')];
-            lastCacheTime.current = Date.now();
         };
         refreshCache();
-        const observer = new MutationObserver(refreshCache);
+        // Debounce zamiast odświeżania przy KAŻDEJ partii mutacji DOM: wcześniej obserwator na całym
+        // dokumencie robił querySelectorAll po całej stronie przy montowaniu sekcji, każdym wejściu
+        // i wyjściu AnimatePresence i wstrzyknięciu widżetu Bitrix. Funkcja „magnetic” zostaje.
+        let timer = null;
+        const observer = new MutationObserver(() => {
+            clearTimeout(timer);
+            timer = setTimeout(refreshCache, 250);
+        });
         observer.observe(document.body, { childList: true, subtree: true });
-        return () => observer.disconnect();
+        return () => {
+            clearTimeout(timer);
+            observer.disconnect();
+        };
     }, [isTouchDevice]);
 
     useEffect(() => {
-        if (isTouchDevice) return;
+        if (isTouchDevice) return undefined;
+
+        const setClass = (name, on) => {
+            dotRef.current?.classList.toggle(name, on);
+            ringRef.current?.classList.toggle(name, on);
+        };
+
         const handleMouseMove = (e) => {
             mousePos.current = { x: e.clientX, y: e.clientY };
 
             const target = e.target;
-            const isInteractive =
-                target.tagName === 'BUTTON' ||
-                target.tagName === 'A' ||
-                target.closest('button') ||
-                target.closest('a') ||
+            // Ten sam warunek co wcześniej, ale jedno przejście w górę drzewa zamiast dwóch
+            // (`closest` obejmuje sam element, więc zastępuje też sprawdzenie tagName).
+            const hot = target instanceof Element && (
+                !!target.closest('button, a') ||
                 target.classList.contains('port-marker') ||
-                target.classList.contains('interactive');
+                target.classList.contains('interactive')
+            );
+            if (hot !== hotRef.current) {
+                hotRef.current = hot;
+                setClass('cc-hot', hot);
+            }
 
-            setIsHovering(!!isInteractive);
+            const magnets = magneticElementsCache.current;
+            if (magnets.length === 0) {
+                magneticTarget.current = null;
+                return;
+            }
 
-            // ✅ Używamy cache zamiast querySelectorAll przy każdym ruchu myszy
             let closestElement = null;
             let minDistance = 100;
-
-            magneticElementsCache.current.forEach(el => {
+            magnets.forEach(el => {
                 const rect = el.getBoundingClientRect();
                 const centerX = rect.left + rect.width / 2;
                 const centerY = rect.top + rect.height / 2;
@@ -66,8 +110,8 @@ export function CustomCursor() {
             magneticTarget.current = closestElement;
         };
 
-        const handleMouseEnter = () => setIsVisible(true);
-        const handleMouseLeave = () => setIsVisible(false);
+        const handleMouseEnter = () => setClass('cc-hidden', false);
+        const handleMouseLeave = () => setClass('cc-hidden', true);
 
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseenter', handleMouseEnter);
@@ -81,7 +125,7 @@ export function CustomCursor() {
     }, [isTouchDevice]);
 
     useEffect(() => {
-        if (isTouchDevice) return;
+        if (isTouchDevice) return undefined;
         let animationFrameId;
 
         const animate = () => {
@@ -116,41 +160,11 @@ export function CustomCursor() {
 
     if (isTouchDevice) return null;
 
-    const accentColor = COLORS?.gradientEnd || '#4a90e2';
-
-    const dotStyle = {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: isHovering ? '40px' : '8px',
-        height: isHovering ? '40px' : '8px',
-        background: isHovering ? 'rgba(253, 151, 49, 0.3)' : accentColor,
-        border: isHovering ? `2px solid ${accentColor}` : 'none',
-        borderRadius: '50%',
-        pointerEvents: 'none',
-        zIndex: 10070,
-        opacity: isVisible ? 1 : 0,
-        transition: 'width 0.3s ease, height 0.3s ease, background 0.3s ease'
-    };
-
-    const ringStyle = {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: isHovering ? '60px' : '40px',
-        height: isHovering ? '60px' : '40px',
-        border: isHovering ? `2px solid ${accentColor}` : '2px solid rgba(255,255,255,0.3)',
-        borderRadius: '50%',
-        pointerEvents: 'none',
-        zIndex: 10069,
-        opacity: isVisible ? 1 : 0,
-        transition: 'width 0.5s ease, height 0.5s ease, border-color 0.3s ease'
-    };
-
     return (
         <>
-            <div ref={dotRef} style={dotStyle} />
-            <div ref={ringRef} style={ringStyle} />
+            <style>{CURSOR_CSS}</style>
+            <div ref={dotRef} className="cc-dot" />
+            <div ref={ringRef} className="cc-ring" />
         </>
     );
 }

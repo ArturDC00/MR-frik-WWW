@@ -3,30 +3,48 @@
 import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo, startTransition } from 'react';
 import dynamic from 'next/dynamic';
 import { AnimatePresence } from 'framer-motion';
-import { Vector3 } from 'three';
 
-// ============ SEKCJE - LAZY (ładowane dopiero gdy potrzebne) ============
-const ProcessSection = lazy(() => import('./components/Sections/ProcessSection').then(m => ({ default: m.ProcessSection })));
-const ValuesSection = lazy(() => import('./components/Sections/ValuesSection').then(m => ({ default: m.ValuesSection })));
-const TrustSection = lazy(() => import('./components/Sections/TrustSection').then(m => ({ default: m.TrustSection })));
-const FAQSection = lazy(() => import('./components/Sections/FAQSection').then(m => ({ default: m.FAQSection })));
-const TestimonialsSection = lazy(() => import('./components/Sections/TestimonialsSection').then(m => ({ default: m.TestimonialsSection })));
-const ContactSection = lazy(() => import('./components/Sections/ContactSection').then(m => ({ default: m.ContactSection })));
+// ============ SEKCJE - LAZY ============
+// Thunki trzymamy osobno, żeby móc je odpalić jako PREFETCH jeszcze w czasie loadera —
+// wtedy sieć stoi bezczynnie, a `lazy()` rozwiąże się później z cache'u webpacka natychmiast.
+const SECTION_IMPORTS = [
+    () => import('./components/Sections/ProcessSection').then(m => ({ default: m.ProcessSection })),
+    () => import('./components/Sections/ValuesSection').then(m => ({ default: m.ValuesSection })),
+    () => import('./components/Sections/TrustSection').then(m => ({ default: m.TrustSection })),
+    () => import('./components/Sections/Platformsection').then(m => ({ default: m.PlatformSection })),
+    () => import('./components/Sections/TestimonialsSection').then(m => ({ default: m.TestimonialsSection })),
+    () => import('./components/Sections/FAQSection').then(m => ({ default: m.FAQSection })),
+    () => import('./components/Sections/ContactSection').then(m => ({ default: m.ContactSection })),
+];
 
-// ============ PLATFORM SECTION ============
-const PlatformSection = lazy(() => import('./components/Sections/Platformsection').then(m => ({ default: m.PlatformSection })));
+const ProcessSection = lazy(SECTION_IMPORTS[0]);
+const ValuesSection = lazy(SECTION_IMPORTS[1]);
+const TrustSection = lazy(SECTION_IMPORTS[2]);
+const PlatformSection = lazy(SECTION_IMPORTS[3]);
+const TestimonialsSection = lazy(SECTION_IMPORTS[4]);
+const FAQSection = lazy(SECTION_IMPORTS[5]);
+const ContactSection = lazy(SECTION_IMPORTS[6]);
 
 // ============ UTILS & STYLES ============
-import { vector3ToLatLng, latLngToVector3 } from './utils/math';
+// geoMath = czysty JS bez `three` — three.core zostaje w chunku globusa, nie w eager grupie App.
+import {
+    pointToLatLng,
+    latLngToPoint,
+    rotateAroundY,
+    normalizeAngle,
+    pointLength,
+} from './utils/geoMath';
 import { isPointInPolygon } from './utils/geography';
 import { SmoothScroll } from './utils/SmoothScroll';
 
 // ============ GLOBE — osobny chunk (Three.js / R3F / postprocessing) ============
-import { StaticHeroPlaceholder } from './components/UI/StaticHeroPlaceholder';
-
+// Fallback to samo tło, a nie StaticHeroPlaceholder: prawdziwe hero renderuje teraz serwer
+// (HeroContent), więc placeholder dublowałby <h1> i drugi <Image priority> w tym samym momencie.
+// Do tego siedzi w kontenerze globusa, którego opacity jest 0 aż do `globeVisible` — czyli
+// w realnym ładowaniu był i tak niewidoczny.
 const WebGLCanvas = dynamic(() => import('./components/Globe/WebGLCanvas'), {
     ssr: false,
-    loading: () => <StaticHeroPlaceholder />,
+    loading: () => <div style={{ position: 'absolute', inset: 0, background: '#020203' }} />,
 });
 
 /** Osobne chunki — mniej pracy na starcie (TBT); bez zmiany logiki scrolla / globusa. */
@@ -101,8 +119,73 @@ function SectionFallback() {
 // Desktop: pionowy pasek po prawej stronie
 // Mobile: floating FAB button + overlay menu (10/10 UX)
 // ============================================================
+
+/**
+ * `id` — cel scrollTo. `observe` — element, którego widoczność wyznacza aktywną sekcję,
+ * gdy różni się od celu: id="section-contact" żyje WEWNĄTRZ lazy ContactSection, a wrapper
+ * w App (zawsze w DOM, także zanim sekcja się zamontuje) to "section-contact-wrap".
+ * Poza modułem, bo to stała — w ciele komponentu tworzyłaby się od nowa przy każdym renderze.
+ */
+const NAV_BUTTONS = [
+    { id: 'section-process', label: 'Proces importu' },
+    { id: 'section-values', label: 'Nasze wartości' },
+    { id: 'section-trust', label: 'Twoje korzyści' },
+    { id: 'section-platform', label: 'Platforma MrFrik' },
+    { id: 'section-reviews', label: 'Opinie klientów' },
+    { id: 'section-faq', label: 'Baza wiedzy' },
+    { id: 'section-contact', observe: 'section-contact-wrap', label: 'Skontaktuj się', accent: true },
+];
+
+/**
+ * Która sekcja jest aktualnie oglądana — do podświetlenia w prawym pasku.
+ *
+ * IntersectionObserver z cienkim pasem na wysokości ~40% ekranu: sekcja jest aktywna, gdy
+ * przecina ten pas. Wrappery sekcji w App są ciągłe (odstęp to paddingTop NASTĘPNEGO wrappera,
+ * nie przerwa między nimi), więc pas zawsze trafia w dokładnie jedną sekcję — a na hero w żadną.
+ *
+ * Obserwujemy wrappery z App, nie wnętrza sekcji: są w DOM od pierwszego renderu i obejmują
+ * pin-spacery GSAP (ProcessSection i ValuesSection są przypinane), więc aktywność trwa przez
+ * cały dystans pinu. Stan jest lokalny dla paska — zmiana sekcji nie re-renderuje App.
+ */
+function useActiveSection(enabled) {
+    const [activeId, setActiveId] = React.useState(null);
+
+    useEffect(() => {
+        if (!enabled) return undefined;
+
+        const idByElement = new Map();
+        for (const b of NAV_BUTTONS) {
+            const el = document.getElementById(b.observe || b.id);
+            if (el) idByElement.set(el, b.id);
+        }
+        if (idByElement.size === 0) return undefined;
+
+        const intersecting = new Set();
+        const io = new IntersectionObserver(
+            (entries) => {
+                for (const entry of entries) {
+                    const id = idByElement.get(entry.target);
+                    if (entry.isIntersecting) intersecting.add(id);
+                    else intersecting.delete(id);
+                }
+                // Na styku dwóch sekcji pas może chwilę przecinać obie — wygrywa późniejsza.
+                let next = null;
+                for (const b of NAV_BUTTONS) if (intersecting.has(b.id)) next = b.id;
+                setActiveId(next);
+            },
+            { rootMargin: '-40% 0px -59% 0px', threshold: 0 },
+        );
+
+        idByElement.forEach((_, el) => io.observe(el));
+        return () => io.disconnect();
+    }, [enabled]);
+
+    return activeId;
+}
+
 function GlobeNavButtons({ show }) {
     const [mobileOpen, setMobileOpen] = React.useState(false);
+    const activeId = useActiveSection(show);
 
     const scrollTo = (id) => {
         setMobileOpen(false);
@@ -113,15 +196,7 @@ function GlobeNavButtons({ show }) {
         else el.scrollIntoView({ behavior: 'smooth' });
     };
 
-    const buttons = [
-        { id: 'section-process', label: 'Proces importu' },
-        { id: 'section-values', label: 'Nasze wartości' },
-        { id: 'section-trust', label: 'Twoje korzyści' },
-        { id: 'section-platform', label: 'Platforma MrFrik' },
-        { id: 'section-reviews', label: 'Opinie klientów' },
-        { id: 'section-faq', label: 'Baza wiedzy' },
-        { id: 'section-contact', label: 'Skontaktuj się', accent: true },
-    ];
+    const buttons = NAV_BUTTONS;
 
     if (!show) return null;
 
@@ -160,7 +235,10 @@ function GlobeNavButtons({ show }) {
                     outline: none;
                     flex-shrink: 0;
                 }
-                .gnb-btn:hover {
+                /* .is-active = sekcja aktualnie oglądana. Wspólny selektor z :hover, żeby
+                   podświetlenie od scrolla było identyczne jak przy najechaniu myszką. */
+                .gnb-btn:hover,
+                .gnb-btn.is-active {
                     background: rgba(253,151,49,0.18);
                     border-color: rgba(253,151,49,0.6);
                     color: #FD9731;
@@ -170,7 +248,8 @@ function GlobeNavButtons({ show }) {
                     border-color: rgba(253,151,49,0.5);
                     color: #FD9731;
                 }
-                .gnb-btn-accent:hover {
+                .gnb-btn-accent:hover,
+                .gnb-btn-accent.is-active {
                     background: linear-gradient(90deg, rgba(253,151,49,0.32) 0%, rgba(207,106,5,0.32) 100%);
                     border-color: #FD9731;
                 }
@@ -292,8 +371,9 @@ function GlobeNavButtons({ show }) {
                     <button
                         key={btn.id}
                         onClick={() => scrollTo(btn.id)}
-                        className={`gnb-btn${btn.accent ? ' gnb-btn-accent' : ''}`}
+                        className={`gnb-btn${btn.accent ? ' gnb-btn-accent' : ''}${activeId === btn.id ? ' is-active' : ''}`}
                         aria-label={btn.label}
+                        aria-current={activeId === btn.id ? 'true' : undefined}
                     >
                         <span style={{
                             width: '6px',
@@ -367,23 +447,49 @@ export default function App() {
     // i uniknąć żółtego rozbłysku z Bloom gdy kamera jest tuż przy globusie
     const [globeVisible, setGlobeVisible] = useState(false);
     // ✅ Tier wydajności: 'LOW' | 'MID' | 'HIGH'
-    const [perfTier] = useState(detectPerfTier);
+    // Detekcja MUSI być w efekcie, nie w inicjalizatorze useState: inicjalizator odpala się
+    // też przy renderze serwerowym, a detectPerfTier czyta navigator.hardwareConcurrency.
+    // `null` do czasu detekcji; konsumenci są bramkowani niżej, więc globus i StarField nigdy
+    // nie powstają z błędnym tierem (efekt leci w tym samym ticku co hydratacja, długo przed
+    // przyjściem chunku WebGL, a Canvas czyta dpr/gl tylko przy tworzeniu).
+    const [perfTier, setPerfTier] = useState(null);
     const isLowPerf = perfTier === 'LOW';
     const isHighPerf = perfTier === 'HIGH';
 
-    const showFinePointerCursor = useMemo(
-        () => typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches,
-        []
-    );
+    useEffect(() => {
+        setPerfTier(detectPerfTier());
+    }, []);
+
+    // Kursor: to samo — matchMedia nie istnieje na serwerze, a `false` na serwerze vs `true`
+    // przy hydratacji dawało mismatch. CustomCursor jest i tak dynamiczny (ssr:false).
+    const [showFinePointerCursor, setShowFinePointerCursor] = useState(false);
+
+    useEffect(() => {
+        setShowFinePointerCursor(window.matchMedia('(pointer: fine)').matches);
+    }, []);
 
     const [geoDataRef, setGeoDataRef] = useState(null);
     const [selectedData, setSelectedData] = useState(null);
     const [activeGeometry, setActiveGeometry] = useState(null);
     const [focusPoint, setFocusPoint] = useState(null);
     const [hoverName, setHoverName] = useState(null);
-    const [hoverGeometry, setHoverGeometry] = useState(null);
-    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-    const [scrollProgress, setScrollProgress] = useState(0);
+    // Hover: w stanie trzymamy tylko to, co zmienia się przy WEJŚCIU / WYJŚCIU z kraju.
+    // Wcześniej każdy pointermove nad krajem zapisywał nową tablicę współrzędnych (hoverGeometry)
+    // i nowy obiekt pozycji myszy — React nie mógł pominąć renderu, więc przelatywał przez całe App,
+    // 7 sekcji i scenę 3D przy KAŻDYM ruchu myszy. Geometria nie była nigdzie czytana poza
+    // `Boolean(hoverGeometry)`, a pozycję tooltip czyta teraz sam (patrz Tooltip.jsx).
+    const [isHoveringTarget, setIsHoveringTarget] = useState(false);
+    const mousePosRef = useRef({ x: 0, y: 0 });
+
+    // Scroll: postęp w refie + cztery progi w stanie. Konsumenci potrzebują tylko progów
+    // (0.15 / 0.3 / 0.68) i dwóch przezroczystości, które ustawiamy bezpośrednio na elementach.
+    // Wcześniej `scrollProgress` jako stan re-renderował App, 7 sekcji i scenę 3D ~40-57x/s scrolla.
+    const [pastHero, setPastHero] = useState(false); //   > 0.15 — StarField pauza, ukrycie tekstu hero
+    const [globeInert, setGlobeInert] = useState(false); // > 0.3  — globus przestaje łapać kursor
+    const [globeIdle, setGlobeIdle] = useState(false); //   >= 0.68 — pętla WebGL w tryb 'demand'
+    const scrollThresholdsRef = useRef({ pastHero: false, globeInert: false, globeIdle: false });
+    const globeBoxRef = useRef(null);
+    const uiLayerRef = useRef(null);
 
     const [isGlobeInteracting, setIsGlobeInteracting] = useState(false);
     /** Po najechaniu na kraj / obrocie globusa: wstrzymaj auto-obrót siatki (mobile nie „wraca” do USA). */
@@ -401,15 +507,33 @@ export default function App() {
     }, []);
 
     // ============ LOADER ============
+    // Pasek jest dekoracją (nie odzwierciedla realnego progresu), więc jego długość to czysty
+    // koszt dodany do każdej wizyty: 1,2%/20 ms = 84 tiki = 1,68 s, plus 1,0 s fade = 2,68 s
+    // zanim `isLoaded` odpali cokolwiek (kamerę, fetch geojson, montaż sekcji).
+    // 2,4%/20 ms = 42 tiki = 0,84 s; z fade 0,4 s daje ~1,24 s. Krok jest całkowity w setnych,
+    // więc pasek dowodliwie osiąga 100 — świadomie NIE przepinamy tego na wykładniczy lerp
+    // do realnej gotowości, bo taki nigdy nie przekracza progu i loader wisi w nieskończoność.
     useEffect(() => {
         const i = setInterval(() => {
             setLoading(p => {
                 if (p >= 100) { clearInterval(i); return 100; }
-                return p + 1.2;
+                return p + 2.4;
             });
         }, 20);
         return () => clearInterval(i);
     }, []);
+
+    // ============ SIATKA BEZPIECZEŃSTWA dla isLoaded ============
+    // `isLoaded` odpalał WYŁĄCZNIE z onAnimationComplete framer-motion, a ten jedzie na rAF.
+    // W karcie w tle rAF nie tyka (klasyk: cmd-klik z wyników Google), więc loader mógł wisieć
+    // dowolnie długo — a za nim stoi cała reszta: start kamery, fetch world.geojson i montaż
+    // sekcji. setInterval liczący `loading` jest w tle tylko throttlowany do ~1 Hz, więc 100
+    // osiąga zawsze; od tego momentu dajemy fade 0.4 s trzykrotny zapas i domykamy ręcznie.
+    useEffect(() => {
+        if (loading < 100 || isLoaded) return undefined;
+        const t = setTimeout(() => setIsLoaded(true), 1200);
+        return () => clearTimeout(t);
+    }, [loading, isLoaded]);
 
     // ============ GLOBE VISIBILITY — opóźnione fade-in ============
     // Zapobiega żółtemu rozbłyskowi z Bloom gdy kamera startuje tuż przy globusie
@@ -421,27 +545,57 @@ export default function App() {
         return () => clearTimeout(t);
     }, [isLoaded, isLowPerf, isHighPerf]);
 
-    // ============ PRELOAD SEKCJI po zakończeniu intro ============
+    // ============ PREFETCH CHUNKÓW SEKCJI — od razu, w czasie loadera ============
+    // Wcześniej sekcje były bramkowane na `introDone` + 500 ms, czyli ~8,7 s na desktopie:
+    // do tego momentu każda z siedmiu renderowała czarny div na 100vh, więc scroll w trakcie
+    // intro nie pokazywał nic. Chunki pobieramy więc od razu (sieć w tym czasie stoi),
+    // a montujemy je gdy loader zejdzie — patrz efekt poniżej.
     useEffect(() => {
-        if (introDone) {
-            const t = setTimeout(() => setSectionsReady(true), 500);
-            return () => clearTimeout(t);
-        }
-    }, [introDone]);
+        const t = setTimeout(() => {
+            SECTION_IMPORTS.forEach((load) => {
+                // Błąd pobrania nie może wywalić drzewa — `lazy()` i tak spróbuje ponownie
+                // przy realnym renderze i wtedy pokaże się Suspense fallback.
+                load().catch(() => {});
+            });
+        }, 150);
+        return () => clearTimeout(t);
+    }, []);
+
+    // ============ MONTAŻ SEKCJI — gdy loader zejdzie, NIE po intro ============
+    // Sekcje są pod foldem, więc ich montaż nie zmienia nic w tym, co widać (hero + globus),
+    // ale sprawia, że scroll w trakcie intro trafia na prawdziwą treść.
+    // ⚠️ Montujemy wszystkie naraz i trzymamy zamontowane: id="section-contact" żyje WEWNĄTRZ
+    // ContactSection (wrapper ma "section-contact-wrap"), więc odmontowanie sekcji poza
+    // viewportem psuje główny CTA nawigacji — getElementById zwraca null i klik jest zjadany.
+    useEffect(() => {
+        if (!isLoaded) return undefined;
+        const t = setTimeout(() => setSectionsReady(true), 0);
+        return () => clearTimeout(t);
+    }, [isLoaded]);
 
     // ============ SCROLL HANDLER ============
-    // Śledzi scroll przez Lenis ('app:scroll') + window fallback
+    // Śledzi scroll przez Lenis ('app:scroll') + window fallback.
+    // Przezroczystości piszemy prosto do DOM (bez Reacta), a setState wołamy tylko przy
+    // przekroczeniu progu — porównanie z refem, żeby nie zlecać Reactowi nawet pustych aktualizacji.
     useEffect(() => {
         const update = (raw) => {
-            const newProgress = Math.min(raw / window.innerHeight, 1);
-            setScrollProgress(prev =>
-                Math.abs(newProgress - prev) > 0.003 ? newProgress : prev
-            );
+            const p = Math.min(raw / window.innerHeight, 1);
+            if (globeBoxRef.current) globeBoxRef.current.style.opacity = String(Math.max(0, 1 - p * 1.5));
+            if (uiLayerRef.current) uiLayerRef.current.style.opacity = String(Math.max(0, 1 - p * 2));
+
+            const t = scrollThresholdsRef.current;
+            const nextPastHero = p > 0.15;
+            const nextGlobeInert = p > 0.3;
+            const nextGlobeIdle = p >= 0.68;
+            if (nextPastHero !== t.pastHero) { t.pastHero = nextPastHero; setPastHero(nextPastHero); }
+            if (nextGlobeInert !== t.globeInert) { t.globeInert = nextGlobeInert; setGlobeInert(nextGlobeInert); }
+            if (nextGlobeIdle !== t.globeIdle) { t.globeIdle = nextGlobeIdle; setGlobeIdle(nextGlobeIdle); }
         };
         const onLenis = (e) => update(e.detail);
         const onScroll = () => update(window.scrollY);
         window.addEventListener('app:scroll', onLenis);
         window.addEventListener('scroll', onScroll, { passive: true });
+        update(window.scrollY);
         return () => {
             window.removeEventListener('app:scroll', onLenis);
             window.removeEventListener('scroll', onScroll);
@@ -450,6 +604,11 @@ export default function App() {
 
     const onOrbitInteractionEnd = useCallback(() => {
         setGlobeAutoSpinPaused(true);
+    }, []);
+
+    // Stabilna referencja — WebGLCanvas jest memo, a inline strzałka co render unieważniałaby memo.
+    const handleIntroComplete = useCallback(() => {
+        setIntroDone(true);
     }, []);
 
     // ============ HANDLE GLOBE EVENT ✅ Z INLINE findCountry ============
@@ -467,14 +626,15 @@ export default function App() {
         // ✅ Inline findCountry - bez potrzeby dodawania do dependencies
         let result = null;
         if (geoDataRef && point) {
-            const corrected = point.clone();
             // Normalizacja kąta do [-π, π] zapobiega akumulacji float przy długiej sesji
-            const normalizedRot = rot - Math.round(rot / (2 * Math.PI)) * (2 * Math.PI);
-            corrected.applyAxisAngle(new Vector3(0, 1, 0), -normalizedRot);
+            const normalizedRot = normalizeAngle(rot);
+            // `point` przychodzi jako THREE.Vector3 z eventu R3F — rotateAroundY czyta tylko x/y/z,
+            // więc działa na obu reprezentacjach i zwraca zwykły obiekt.
+            const corrected = rotateAroundY(point, -normalizedRot);
             // Hitbox sphere ma radius GLOBE_RADIUS+0.5 — używamy rzeczywistego promienia punktu
             // aby acos(y/r) był dokładny (bez tego błąd ~1° szerokości geograficznej)
-            const hitRadius = Math.sqrt(corrected.x ** 2 + corrected.y ** 2 + corrected.z ** 2);
-            const { lat, lng } = vector3ToLatLng(corrected.x, corrected.y, corrected.z, hitRadius);
+            const hitRadius = pointLength(corrected);
+            const { lat, lng } = pointToLatLng(corrected.x, corrected.y, corrected.z, hitRadius);
             const check = (poly) => isPointInPolygon([lng, lat], poly);
 
             for (const f of geoDataRef.features) {
@@ -521,23 +681,27 @@ export default function App() {
                 // złą część globusa gdy obrót był niezsynchronizowany.
                 // Centroid jest zawsze geograficznie poprawny.
                 const centroid = COUNTRY_CENTROIDS[name];
-                if (centroid) {
-                    setFocusPoint(latLngToVector3(centroid.lat, centroid.lng, GLOBE_RADIUS));
-                } else {
-                    setFocusPoint(latLngToVector3(validResult.lat, validResult.lng, GLOBE_RADIUS));
-                }
+                const localPoint = centroid
+                    ? latLngToPoint(centroid.lat, centroid.lng, GLOBE_RADIUS)
+                    : latLngToPoint(validResult.lat, validResult.lng, GLOBE_RADIUS);
+                // Punkt kraju jest w układzie GLOBUSA, a kamera potrzebuje układu ŚWIATA. Globus
+                // obraca się sam (~1°/s do pierwszego najechania na kraj), więc bez tego obrotu kamera
+                // leciała tam, gdzie kraj byłby przy rotacji 0 — po pół minuty oglądania hero klik
+                // w USA pokazywał głównie ocean. `rot` to rotacja grupy w chwili kliknięcia (auto-obrót
+                // jest wtedy wstrzymany, więc punkt pozostaje aktualny przez cały fokus).
+                setFocusPoint(rotateAroundY(localPoint, normalizeAngle(rot)));
             } else {
                 // handleClose inline
                 setSelectedData(null);
                 setActiveGeometry(null);
                 setFocusPoint(null);
-                setHoverGeometry(null);
+                setIsHoveringTarget(false);
                 setIsGlobeInteracting(false);
             }
         } else if (type === 'HOVER') {
             if (!point) {
                 setHoverName(null);
-                setHoverGeometry(null);
+                setIsHoveringTarget(false);
                 if (!selectedData) setIsGlobeInteracting(false);
                 return;
             }
@@ -546,15 +710,15 @@ export default function App() {
                 const props = validResult.f.properties;
                 const name = props.admin || props.name || props.name_long;
                 setIsGlobeInteracting(true);
+                // Pozycja do refa, nie do stanu — tooltip po zamontowaniu sam śledzi kursor.
+                // Wszystkie setState poniżej mają tę samą wartość przy kolejnych ruchach nad tym
+                // samym krajem, więc React je porzuca: render tylko przy zmianie kraju.
+                mousePosRef.current = { x: event.clientX, y: event.clientY };
                 setHoverName(COUNTRY_NAMES_PL[name] || name);
-                setMousePos({ x: event.clientX, y: event.clientY });
-                const coords = validResult.f.geometry.type === 'Polygon'
-                    ? [validResult.f.geometry.coordinates[0]]
-                    : validResult.f.geometry.coordinates.map(p => p[0]);
-                setHoverGeometry(coords);
+                setIsHoveringTarget(true);
             } else {
                 setHoverName(null);
-                setHoverGeometry(null);
+                setIsHoveringTarget(false);
             }
         }
     }, [introDone, geoDataRef, selectedData]);
@@ -563,9 +727,96 @@ export default function App() {
         setSelectedData(null);
         setActiveGeometry(null);
         setFocusPoint(null);
-        setHoverGeometry(null);
+        setIsHoveringTarget(false);
         setIsGlobeInteracting(false);
     };
+
+    // ============ SEKCJE — zmemoizowane ============
+    // Sekcje nie przyjmują propsów, więc jedyną rzeczą, która może zmienić ich drzewo, jest
+    // `sectionsReady`. Bez memo każdy render App (loader, zmiana kraju pod kursorem, próg scrolla,
+    // klik w kraj) przelatywał przez wszystkie 7 sekcji — kilkaset elementów.
+    const sectionsTree = useMemo(() => (
+        <>
+        {/* SEKCJE - lazy loaded, renderowane dopiero po intro */}
+        <main style={{
+            position: 'relative',
+            zIndex: 10,
+            background: '#020203',
+            pointerEvents: 'auto'
+        }}>
+            <div id="section-process">
+                {sectionsReady ? (
+                    <Suspense fallback={<SectionFallback />}>
+                        <ProcessSection />
+                    </Suspense>
+                ) : (
+                    <SectionFallback />
+                )}
+            </div>
+
+            <div id="section-values" style={{ paddingTop: 'clamp(48px, 7vh, 100px)' }}>
+                {sectionsReady ? (
+                    <Suspense fallback={<SectionFallback />}>
+                        <ValuesSection />
+                    </Suspense>
+                ) : (
+                    <SectionFallback />
+                )}
+            </div>
+
+            <div id="section-trust" style={{ paddingTop: 'clamp(48px, 7vh, 100px)' }}>
+                {sectionsReady ? (
+                    <Suspense fallback={<SectionFallback />}>
+                        <TrustSection />
+                    </Suspense>
+                ) : (
+                    <SectionFallback />
+                )}
+            </div>
+
+            {/* ✅ PLATFORMSECTION - PO TRUST SECTION */}
+            <div id="section-platform" style={{ paddingTop: 'clamp(48px, 7vh, 100px)' }}>
+                {sectionsReady ? (
+                    <Suspense fallback={<SectionFallback />}>
+                        <PlatformSection />
+                    </Suspense>
+                ) : (
+                    <SectionFallback />
+                )}
+            </div>
+
+            <div id="section-reviews" style={{ paddingTop: 'clamp(48px, 7vh, 100px)' }}>
+                {sectionsReady ? (
+                    <Suspense fallback={<SectionFallback />}>
+                        <TestimonialsSection />
+                    </Suspense>
+                ) : (
+                    <SectionFallback />
+                )}
+            </div>
+
+            <div id="section-faq" style={{ paddingTop: 'clamp(48px, 7vh, 100px)' }}>
+                {sectionsReady ? (
+                    <Suspense fallback={<SectionFallback />}>
+                        <FAQSection />
+                    </Suspense>
+                ) : (
+                    <SectionFallback />
+                )}
+            </div>
+
+            <div id="section-contact-wrap" style={{ paddingTop: 'clamp(48px, 7vh, 100px)' }}>
+                {sectionsReady ? (
+                    <Suspense fallback={<SectionFallback />}>
+                        <ContactSection />
+                    </Suspense>
+                ) : (
+                    <SectionFallback />
+                )}
+            </div>
+        </main>
+        </>
+    ), [sectionsReady]);
 
     return (
         <>
@@ -591,7 +842,9 @@ export default function App() {
             <SmoothScroll>
                 <AmbientSound play={isLoaded} />
                 {/* LOW=50, MID=90, HIGH=150 cząsteczek gwiazd */}
-                <StarField particleCount={isLowPerf ? 50 : isHighPerf ? 150 : 90} speed={0.2} paused={scrollProgress > 0.15} />
+                {perfTier && (
+                    <StarField particleCount={isLowPerf ? 50 : isHighPerf ? 150 : 90} speed={0.2} paused={pastHero} />
+                )}
 
                 {/* HERO BACKGROUND */}
                 <div style={{
@@ -602,144 +855,90 @@ export default function App() {
                     zIndex: 1
                 }} />
 
-                {/* ✅ GLOBUS */}
+                {/* ✅ GLOBUS
+                    data-lenis-prevent-TOUCH, nie data-lenis-prevent. Pełny `data-lenis-prevent`
+                    wyłączał Lenisowi także KÓŁKO nad globusem. Przy powrocie w górę, gdy scroll
+                    schodził poniżej 0.3 i globus odzyskiwał pointerEvents, kolejne zdarzenia kółka
+                    trafiały w globus: Lenis przestawał je przyjmować, ale przez ~0,7 s dogrywał
+                    starą animację i trzymał pozycję (onNativeScroll ignoruje natywny scroll, dopóki
+                    isScrolling === 'smooth'), po czym natywny scroll robił skok o cały „ząbek”
+                    kółka, a Lenis go korygował. Zmierzone prawdziwymi zdarzeniami kółka: ~40 klatek
+                    zamrożenia, potem -60 px i +55 px w dwóch klatkach — to było „szarpanie”.
+                    Wyłączenie tylko dotyku zachowuje powód istnienia atrybutu: na tabletach
+                    przeciąganie po globusie ma go obracać, a nie przewijać stronę. */}
                 <div
-                    data-lenis-prevent
+                    ref={globeBoxRef}
+                    data-lenis-prevent-touch
                     style={{
                     position: 'fixed',
                     top: 0, left: 0,
                     width: '100vw', height: '100vh',
                     zIndex: 2,
-                    pointerEvents: scrollProgress > 0.3 ? 'none' : 'auto',
+                    pointerEvents: globeInert ? 'none' : 'auto',
                     /* 'none': Lenis + pan-y na tablecie przejmowały drugi gest (scroll) zamiast obrotu globusa */
                     touchAction: 'none',
-                    // ✅ globeVisible: opóźnione fade-in chroni przed żółtym rozbłyskiem Bloom
-                    opacity: globeVisible ? Math.max(0, 1 - scrollProgress * 1.5) : 0,
-                    transition: globeVisible ? 'opacity 1.2s ease-out' : 'none',
+                    // `opacity` NIE jest tutaj celowo: ustawia ją handler scrolla bezpośrednio na
+                    // elemencie (globeBoxRef), 1 - progress × 1.5, bez transition. Gdyby była w tym
+                    // obiekcie, każdy render App nadpisywałby wartość ze scrolla.
                 }}>
-                    <WebGLCanvas
+                    {/* Fade startowy jest osobną warstwą: to jednorazowe 0→1 chroniące przed
+                        rozbłyskiem Bloom i NIE może mieszać się z opacity od scrolla.
+                        Dwie pomnożone przezroczystości dają ten sam efekt wizualny co wcześniej. */}
+                    <div style={{
+                        width: '100%', height: '100%',
+                        opacity: globeVisible ? 1 : 0,
+                        transition: 'opacity 1.2s ease-out',
+                    }}>
+                    {/* perfTier: Canvas czyta dpr/gl/antialias tylko przy tworzeniu, więc musi
+                        powstać dopiero po detekcji tieru (jedna klatka po hydratacji). */}
+                    {/* Wszystkie propsy są prymitywami albo stabilnymi referencjami (useCallback / ref),
+                        więc memo na WebGLCanvas faktycznie pomija render sceny, gdy App się przerenderuje
+                        z niezwiązanego powodu (np. loader, zmiana kraju pod kursorem). */}
+                    {perfTier && <WebGLCanvas
                         perfTier={perfTier}
                         isLowPerf={isLowPerf}
                         isHighPerf={isHighPerf}
-                        scrollProgress={scrollProgress}
+                        globeIdle={globeIdle}
                         introDone={introDone}
                         isLoaded={isLoaded}
                         focusPoint={focusPoint}
-                        onIntroComplete={() => setIntroDone(true)}
+                        onIntroComplete={handleIntroComplete}
                         onGlobeEvent={handleGlobeEvent}
                         onOrbitInteractionEnd={onOrbitInteractionEnd}
-                        activeGeometry={activeGeometry}
-                        hoverGeometry={hoverGeometry}
                         globeRotation={globeRotation}
                         globeAutoSpinPaused={globeAutoSpinPaused}
-                        hasHoverGeometry={Boolean(hoverGeometry)}
+                        hasHoverGeometry={isHoveringTarget}
                         hasActiveGeometry={Boolean(activeGeometry)}
                         hasFocusPoint={Boolean(focusPoint)}
-                    />
+                    />}
+                    </div>
                 </div>
 
                 {/* ✅ LOADER — nad hero do końca animacji; potem isLoaded → null (strona widoczna) */}
                 <Loader progress={loading} onComplete={() => setIsLoaded(true)} isLoaded={isLoaded} />
 
                 {/* UI LAYER — pod loaderem do momentu isLoaded; potem pełny hero */}
-                <div style={{
+                <div ref={uiLayerRef} style={{
                     position: 'relative',
                     zIndex: 10020,
                     pointerEvents: 'none',
-                    opacity: Math.max(0, 1 - scrollProgress * 2),
-                    transition: 'opacity 0.3s ease'
+                    // `opacity` ustawia handler scrolla bezpośrednio (uiLayerRef), 1 - progress × 2,
+                    // bez transition — z tego samego powodu co przy kontenerze globusa.
                 }}>
                     <div style={{ height: '100vh', position: 'relative' }}>
                         <HeroContent
-                            scrollProgress={scrollProgress}
+                            hideHero={pastHero}
                             isGlobeInteracting={isGlobeInteracting}
                             introDone={introDone}
                         />
                     </div>
 
                     {hoverName && !selectedData && introDone && (
-                        <Tooltip name={hoverName} x={mousePos.x} y={mousePos.y} />
+                        <Tooltip name={hoverName} initialPosRef={mousePosRef} />
                     )}
                 </div>
 
-                {/* SEKCJE - lazy loaded, renderowane dopiero po intro */}
-                <main style={{
-                    position: 'relative',
-                    zIndex: 10,
-                    background: '#020203',
-                    pointerEvents: 'auto'
-                }}>
-                    <div id="section-process">
-                        {sectionsReady ? (
-                            <Suspense fallback={<SectionFallback />}>
-                                <ProcessSection />
-                            </Suspense>
-                        ) : (
-                            <SectionFallback />
-                        )}
-                    </div>
-
-                    <div id="section-values" style={{ paddingTop: 'clamp(48px, 7vh, 100px)' }}>
-                        {sectionsReady ? (
-                            <Suspense fallback={<SectionFallback />}>
-                                <ValuesSection />
-                            </Suspense>
-                        ) : (
-                            <SectionFallback />
-                        )}
-                    </div>
-
-                    <div id="section-trust" style={{ paddingTop: 'clamp(48px, 7vh, 100px)' }}>
-                        {sectionsReady ? (
-                            <Suspense fallback={<SectionFallback />}>
-                                <TrustSection />
-                            </Suspense>
-                        ) : (
-                            <SectionFallback />
-                        )}
-                    </div>
-
-                    {/* ✅ PLATFORMSECTION - PO TRUST SECTION */}
-                    <div id="section-platform" style={{ paddingTop: 'clamp(48px, 7vh, 100px)' }}>
-                        {sectionsReady ? (
-                            <Suspense fallback={<SectionFallback />}>
-                                <PlatformSection />
-                            </Suspense>
-                        ) : (
-                            <SectionFallback />
-                        )}
-                    </div>
-
-                    <div id="section-reviews" style={{ paddingTop: 'clamp(48px, 7vh, 100px)' }}>
-                        {sectionsReady ? (
-                            <Suspense fallback={<SectionFallback />}>
-                                <TestimonialsSection />
-                            </Suspense>
-                        ) : (
-                            <SectionFallback />
-                        )}
-                    </div>
-
-                    <div id="section-faq" style={{ paddingTop: 'clamp(48px, 7vh, 100px)' }}>
-                        {sectionsReady ? (
-                            <Suspense fallback={<SectionFallback />}>
-                                <FAQSection />
-                            </Suspense>
-                        ) : (
-                            <SectionFallback />
-                        )}
-                    </div>
-
-                    <div id="section-contact-wrap" style={{ paddingTop: 'clamp(48px, 7vh, 100px)' }}>
-                        {sectionsReady ? (
-                            <Suspense fallback={<SectionFallback />}>
-                                <ContactSection />
-                            </Suspense>
-                        ) : (
-                            <SectionFallback />
-                        )}
-                    </div>
-                </main>
+                {sectionsTree}
 
             </SmoothScroll>
 
