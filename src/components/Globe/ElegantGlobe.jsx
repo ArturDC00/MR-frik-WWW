@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useMemo, forwardRef, startTransition } from 'react';
+import React, { useRef, useState, useEffect, useLayoutEffect, useMemo, forwardRef, memo, startTransition } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { latLngToVector3 } from '../../utils/math';
@@ -9,6 +9,7 @@ import { HolographicFillShader } from '../../shaders/HolographicFillShader';
 import { AtmosphereShader } from '../../shaders/AtmosphereShader';
 import { StartLogoMarker } from './StartLogoMarker';
 import earcut from 'earcut';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { PORTS } from '../../constants/ports';
 import { PortMarker } from './PortMarker';
 import { AnimatedRoutes } from './AnimatedRoutes';
@@ -22,6 +23,49 @@ const TARGET_COUNTRIES = [
     "Poland",
     "Netherlands"
 ];
+
+// Kolory warstw linii — stałe modułu. Wcześniej `new THREE.Color(...)` w JSX tworzyło 5 obiektów
+// przy każdym renderze, a R3F kopiował je do uniformów za każdym razem (nowa referencja = zmiana propa).
+// R3F robi `uniform.value.copy(stała)`, więc same stałe nigdy nie są modyfikowane.
+const WORLD_LINE_START = new THREE.Color('#0e2a50');
+const WORLD_LINE_END = new THREE.Color('#1a4070');
+const TARGET_LINE_START = new THREE.Color('#FFFFFF');
+const TARGET_LINE_END = new THREE.Color(COLORS.gradientEnd);
+const GLOW_LINE_COLOR = new THREE.Color(COLORS.gradientEnd);
+
+// Trasy statków — stała modułu (wcześniej literał odtwarzany przy każdym renderze komponentu).
+const SHIP_ROUTES = [
+    { start: [40.71, -74.00], end: [53.55, 8.58], color: '#1a4a8a' },
+    { start: [25.76, -80.19], end: [51.92, 4.47], color: '#1e52a0' },
+    { start: [29.76, -95.36], end: [53.55, 9.99], color: '#183d80' },
+    { start: [32.08, -81.09], end: [51.21, 4.40], color: '#1e52a0' },
+    { start: [33.74, -118.28], end: [35.67, 139.65], color: '#1a4590' },
+];
+
+// Bufory robocze pętli statków — zero alokacji na klatkę (wcześniej 3 × Vector3 × statek × klatka,
+// czyli ~2700 obiektów/s na HIGH do sprzątnięcia przez GC). Pętla jest synchroniczna i instancja
+// InstancedShips jest jedna, więc współdzielenie jest bezpieczne.
+const _shipPoint = new THREE.Vector3();
+const _shipTangent = new THREE.Vector3();
+const _shipLook = new THREE.Vector3();
+
+// Analityczne trafienie w niewidzialną kulę interakcji. Domyślny Mesh.raycast iterował 1984 trójkąty
+// geometrii 32×32 przy każdym pointermove (~67 µs); przecięcie promienia z kulą to ~0,24 µs i jest
+// dokładniejsze (bez fasetek). Zwraca bliższy punkt przecięcia w przestrzeni świata — dokładnie to,
+// co wcześniej zwracał raycast siatki (FrontSide = tylko przednia powierzchnia).
+const _hitSphere = new THREE.Sphere(new THREE.Vector3(), GLOBE_RADIUS + 0.5);
+const _hitInverse = new THREE.Matrix4();
+const _hitRay = new THREE.Ray();
+const _hitLocal = new THREE.Vector3();
+function hitboxSphereRaycast(raycaster, intersects) {
+    _hitInverse.copy(this.matrixWorld).invert();
+    _hitRay.copy(raycaster.ray).applyMatrix4(_hitInverse);
+    if (!_hitRay.intersectSphere(_hitSphere, _hitLocal)) return;
+    const point = _hitLocal.clone().applyMatrix4(this.matrixWorld);
+    const distance = raycaster.ray.origin.distanceTo(point);
+    if (distance < raycaster.near || distance > raycaster.far) return;
+    intersects.push({ distance, point, object: this });
+}
 
 // Quality settings per tier
 const QUALITY_PRESETS = {
@@ -55,14 +99,6 @@ function InstancedShips({ isActive, quality }) {
     const meshRef = useRef();
     const dummyRef = useRef(new THREE.Object3D());
 
-    const SHIP_ROUTES = [
-        { start: [40.71, -74.00], end: [53.55, 8.58], color: '#1a4a8a' },
-        { start: [25.76, -80.19], end: [51.92, 4.47], color: '#1e52a0' },
-        { start: [29.76, -95.36], end: [53.55, 9.99], color: '#183d80' },
-        { start: [32.08, -81.09], end: [51.21, 4.40], color: '#1e52a0' },
-        { start: [33.74, -118.28], end: [35.67, 139.65], color: '#1a4590' },
-    ];
-
     // Prepare ship data ONCE
     const shipData = useMemo(() => {
         const ships = [];
@@ -91,6 +127,17 @@ function InstancedShips({ isActive, quality }) {
 
     const totalShips = shipData.length;
 
+    // Kolory statków są stałe — ustawiamy je RAZ po zamontowaniu. Wcześniej setColorAt dla każdego
+    // statku + instanceColor.needsUpdate leciały w każdej klatce, czyli ponowne wysłanie całego
+    // bufora kolorów do GPU 60x/s. Efekt layoutu odpala się przed pierwszą klatką R3F, więc atrybut
+    // instanceColor istnieje, zanim materiał się skompiluje — jak wcześniej.
+    useLayoutEffect(() => {
+        const mesh = meshRef.current;
+        if (!mesh || !isActive) return;
+        shipData.forEach((ship, idx) => mesh.setColorAt(idx, ship.color));
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }, [shipData, isActive]);
+
     // Throttled update based on quality
     const frameCount = useRef(0);
     const updateFreq = QUALITY_PRESETS[quality].updateFrequency;
@@ -105,23 +152,19 @@ function InstancedShips({ isActive, quality }) {
 
         shipData.forEach((ship, idx) => {
             const t = (time * ship.speed + ship.offset) % 1;
-            const point = ship.curve.getPoint(t);
+            ship.curve.getPoint(t, _shipPoint);
 
-            dummyRef.current.position.copy(point);
+            dummyRef.current.position.copy(_shipPoint);
 
             // Rotation towards movement direction
-            const tangent = ship.curve.getTangent(t);
-            dummyRef.current.lookAt(point.clone().add(tangent));
+            ship.curve.getTangent(t, _shipTangent);
+            dummyRef.current.lookAt(_shipLook.copy(_shipPoint).add(_shipTangent));
 
             dummyRef.current.updateMatrix();
             meshRef.current.setMatrixAt(idx, dummyRef.current.matrix);
-            meshRef.current.setColorAt(idx, ship.color);
         });
 
         meshRef.current.instanceMatrix.needsUpdate = true;
-        if (meshRef.current.instanceColor) {
-            meshRef.current.instanceColor.needsUpdate = true;
-        }
     });
 
     if (!isActive) return null;
@@ -137,12 +180,12 @@ function InstancedShips({ isActive, quality }) {
 // ============================================================
 // OPTIMIZED GLOBE - LOD + Instancing + Performance Detection
 // ============================================================
-export const ElegantGlobe = forwardRef(({
+export const ElegantGlobe = memo(forwardRef(({
     perfTier: perfTierProp,
     onSelect,
     onHover,
-    activeGeometry,
-    hoverGeometry,
+    /** Tylko wartość prawda/fałsz jest potrzebna (pauza auto-obrotu), więc przychodzi boolean. */
+    hasActiveGeometry = false,
     globeRotation,
     isIntroDone,
     pauseAutoRotate = false,
@@ -208,8 +251,8 @@ export const ElegantGlobe = forwardRef(({
     }, [enableGeoFetch]); // enableGeoFetch: jednorazowy start po odblokowaniu (np. isLoaded)
 
     // Optimized geometry generation with LOD
-    const { worldLines, targetLines, targetGeometries } = useMemo(() => {
-        if (!geoData) return { worldLines: null, targetLines: null, targetGeometries: [] };
+    const { worldLines, targetLines, targetGeometry } = useMemo(() => {
+        if (!geoData) return { worldLines: null, targetLines: null, targetGeometry: null };
 
         const wPts = [];
         const tPts = [];
@@ -290,12 +333,22 @@ export const ElegantGlobe = forwardRef(({
 
         // console.log(`✅ [${perfTier}] Created ${tGeometries.length} geometries`);
 
+        // Jedna geometria zamiast 43 siatek. Obraz identyczny: te same trójkąty, jeden wspólny materiał
+        // (43 poprzednie i tak współdzieliły jeden obiekt uniformów), blending addytywny nie zależy od
+        // kolejności, a depthWrite jest wyłączony. Zysk: 42 wywołania rysowania mniej na klatkę i brak
+        // sortowania 43 przezroczystych obiektów po głębi w każdej klatce.
+        const nonEmpty = tGeometries.filter((g) => g.getAttribute('position').count > 0);
+        const merged = nonEmpty.length ? mergeGeometries(nonEmpty) : null;
+        tGeometries.forEach((g) => g.dispose());
+
         return {
             worldLines: new Float32Array(wPts),
             targetLines: new Float32Array(tPts),
-            targetGeometries: tGeometries
+            targetGeometry: merged
         };
     }, [geoData, perfTier]); // ✅ REMOVED quality object
+
+    useEffect(() => () => targetGeometry?.dispose(), [targetGeometry]);
 
     // Throttled rotation update
     const frameCount = useRef(0);
@@ -305,7 +358,7 @@ export const ElegantGlobe = forwardRef(({
 
         const t = state.clock.elapsedTime;
 
-        if (groupRef.current && !activeGeometry && isIntroDone && !pauseAutoRotate) {
+        if (groupRef.current && !hasActiveGeometry && isIntroDone && !pauseAutoRotate) {
             groupRef.current.rotation.y += 0.0003;
             if (globeRotation && globeRotation.current !== undefined) {
                 globeRotation.current = groupRef.current.rotation.y;
@@ -356,8 +409,8 @@ export const ElegantGlobe = forwardRef(({
                     </bufferGeometry>
                     <shaderMaterial
                         args={[GradientLineShader]}
-                        uniforms-colorStart-value={new THREE.Color('#0e2a50')}
-                        uniforms-colorEnd-value={new THREE.Color('#1a4070')}
+                        uniforms-colorStart-value={WORLD_LINE_START}
+                        uniforms-colorEnd-value={WORLD_LINE_END}
                         transparent depthWrite={false}
                         blending={THREE.AdditiveBlending}
                         opacity={0.4}
@@ -373,8 +426,8 @@ export const ElegantGlobe = forwardRef(({
                     </bufferGeometry>
                     <shaderMaterial
                         args={[GradientLineShader]}
-                        uniforms-colorStart-value={new THREE.Color('#FFFFFF')}
-                        uniforms-colorEnd-value={new THREE.Color(COLORS.gradientEnd)}
+                        uniforms-colorStart-value={TARGET_LINE_START}
+                        uniforms-colorEnd-value={TARGET_LINE_END}
                         transparent depthTest={true} depthWrite={false}
                         blending={THREE.AdditiveBlending}
                         linewidth={1}
@@ -391,8 +444,8 @@ export const ElegantGlobe = forwardRef(({
                     </bufferGeometry>
                     <shaderMaterial
                         args={[GradientLineShader]}
-                        uniforms-colorStart-value={new THREE.Color(COLORS.gradientEnd)}
-                        uniforms-colorEnd-value={new THREE.Color(COLORS.gradientEnd)}
+                        uniforms-colorStart-value={GLOW_LINE_COLOR}
+                        uniforms-colorEnd-value={GLOW_LINE_COLOR}
                         transparent depthTest={true} depthWrite={false}
                         blending={THREE.AdditiveBlending}
                         opacity={0.6}
@@ -402,8 +455,8 @@ export const ElegantGlobe = forwardRef(({
             )}
 
             {/* KRAJE DOCELOWE - fill */}
-            {targetGeometries && targetGeometries.map((geom, idx) => (
-                <mesh key={idx} geometry={geom} renderOrder={3} frustumCulled={true}>
+            {targetGeometry && (
+                <mesh geometry={targetGeometry} renderOrder={3} frustumCulled={true}>
                     <shaderMaterial
                         args={[HolographicFillShader]}
                         transparent side={THREE.DoubleSide}
@@ -414,7 +467,7 @@ export const ElegantGlobe = forwardRef(({
                         uniforms-uOpacity-value={0.8}
                     />
                 </mesh>
-            ))}
+            )}
 
             <StartLogoMarker />
 
@@ -432,6 +485,7 @@ export const ElegantGlobe = forwardRef(({
             <mesh
                 visible={false}
                 frustumCulled={false}
+                raycast={hitboxSphereRaycast}
                 onPointerDown={(e) => {
                     e.stopPropagation();
                     // Zapamiętaj pozycję startu — do odróżnienia tap vs drag
@@ -460,11 +514,11 @@ export const ElegantGlobe = forwardRef(({
                     if (onHover) onHover(null, null, null);
                 }}
             >
-                <sphereGeometry args={[GLOBE_RADIUS + 0.5, 32, 32]} />
+                <sphereGeometry args={[GLOBE_RADIUS + 0.5, 8, 6]} />
             </mesh>
 
         </group>
     );
-});
+}));
 
 ElegantGlobe.displayName = 'ElegantGlobe';

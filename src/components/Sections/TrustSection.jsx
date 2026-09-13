@@ -336,6 +336,36 @@ function useStepToTarget(target, shouldStart) {
     return display;
 }
 
+/**
+ * Liczniki jako osobne komponenty. Wcześniej stan obu liczników siedział w TrustSection, więc każda
+ * zmiana cyfry (rAF przez 2,5 s + interwał 16 ms) przerenderowywała całą sekcję — ok. 157 razy dokładnie
+ * w momencie, gdy użytkownik w nią wjeżdża scrollem. Teraz odświeża się tylko jeden <p>.
+ * Wynikowy HTML jest identyczny: ten sam element, klasa, aria-label, styl i tekst.
+ */
+const STAT_NUMBER_STYLE = {
+    color: 'transparent',
+    fontFamily: '"Monument Extended"',
+    fontWeight: '500',
+    margin: 0,
+    WebkitTextStroke: '2px #FD9731',
+    textShadow: '0px 0px 39.5px rgba(253, 151, 49, 0.50)',
+    filter: 'drop-shadow(0px 0px 30px rgba(253, 151, 49, 0.6))'
+};
+
+function ImportCountStat({ target, start }) {
+    const count = useStepToTarget(target, start);
+    return (
+        <p className="stat-number" aria-label={`${count} sprowadzonych aut`} style={STAT_NUMBER_STYLE}>{count}</p>
+    );
+}
+
+function SatisfactionStat({ start }) {
+    const count = useCounter(99, 2500, start);
+    return (
+        <p className="stat-number" aria-label={`${count}% zadowolonych klientów`} style={STAT_NUMBER_STYLE}>{count}%</p>
+    );
+}
+
 // Animated Line — pure CSS, no JS animation loop, always fully visible
 // Background track + travelling spark via CSS keyframes (60fps GPU-composited)
 function AnimatedLine({ pathData, gradientId, position, isLeft, hasAnimated }) {
@@ -494,8 +524,6 @@ export function TrustSection() {
     const sectionRef = useRef(null);
     const carContainerRef = useRef(null);
     const [hasAnimated, setHasAnimated] = useState(false);
-    const [isVisible, setIsVisible] = useState(false); // ✅ Czy sekcja jest w viewport
-    const [scrollProgress, setScrollProgress] = useState(0);
 
     // Wstrzyknięcie stylów
     useEffect(() => {
@@ -514,7 +542,6 @@ export function TrustSection() {
 
         const observer = new IntersectionObserver(
             ([entry]) => {
-                setIsVisible(entry.isIntersecting);
                 if (entry.isIntersecting && !hasAnimated) {
                     setHasAnimated(true);
                 }
@@ -526,27 +553,11 @@ export function TrustSection() {
         return () => observer.disconnect();
     }, [hasAnimated]);
 
-    // ✅ Scroll listener tylko gdy sekcja jest w viewport
-    useEffect(() => {
-        if (!isVisible) return;
-
-        const handleScroll = () => {
-            if (!carContainerRef.current) return;
-            const rect = carContainerRef.current.getBoundingClientRect();
-            const windowHeight = window.innerHeight;
-            const progress = Math.max(0, Math.min(1,
-                (windowHeight - rect.top) / (windowHeight + rect.height)
-            ));
-            setScrollProgress(progress);
-        };
-        window.addEventListener('scroll', handleScroll, { passive: true });
-        handleScroll();
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, [isVisible]);
+    // Usunięty listener scrolla: przy każdym ticku wymuszał synchroniczny layout
+    // (getBoundingClientRect) i zapisywał `scrollProgress`, którego nic nie czytało — zapowiadany
+    // parallax nigdy nie został podpięty. Jedyny efekt: pełny re-render sekcji na każdą klatkę scrolla.
 
     const { targetCount: importTarget, ready: importCountReady } = useImportCountTarget();
-    const count1 = useStepToTarget(importTarget, hasAnimated && importCountReady);
-    const count2 = useCounter(99, 2500, hasAnimated);
 
     const lineTopLeft = {
         svgProps: { width: "160", height: "813", viewBox: "0 0 160 813", fill: "none" },
@@ -577,15 +588,7 @@ export function TrustSection() {
                     }}>
                         <div className="stat-item">
                             <p className="stat-label" style={{ color: '#F7F7F7', fontWeight: '500', margin: 0 }}>Ponad</p>
-                            <p className="stat-number" aria-label={`${count1} sprowadzonych aut`} style={{
-                                color: 'transparent',
-                                fontFamily: '"Monument Extended"',
-                                fontWeight: '500',
-                                margin: 0,
-                                WebkitTextStroke: '2px #FD9731',
-                                textShadow: '0px 0px 39.5px rgba(253, 151, 49, 0.50)',
-                                filter: 'drop-shadow(0px 0px 30px rgba(253, 151, 49, 0.6))'
-                            }}>{count1}</p>
+                            <ImportCountStat target={importTarget} start={hasAnimated && importCountReady} />
                             <p className="stat-desc" style={{ color: '#F7F7F7', fontWeight: '400', margin: 0 }}>
                                 sprowadzonych aut od 2018 roku
                             </p>
@@ -595,15 +598,7 @@ export function TrustSection() {
 
                         <div className="stat-item">
                             <p className="stat-label" style={{ color: '#F7F7F7', fontWeight: '500', margin: 0 }}>Blisko</p>
-                            <p className="stat-number" aria-label={`${count2}% zadowolonych klientów`} style={{
-                                color: 'transparent',
-                                fontFamily: '"Monument Extended"',
-                                fontWeight: '500',
-                                margin: 0,
-                                WebkitTextStroke: '2px #FD9731',
-                                textShadow: '0px 0px 39.5px rgba(253, 151, 49, 0.50)',
-                                filter: 'drop-shadow(0px 0px 30px rgba(253, 151, 49, 0.6))'
-                            }}>{count2}%</p>
+                            <SatisfactionStat start={hasAnimated} />
                             <p className="stat-desc" style={{ color: '#F7F7F7', fontWeight: '400', margin: 0 }}>
                                 zadowolonych klientów
                             </p>

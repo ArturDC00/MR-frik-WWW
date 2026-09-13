@@ -13,7 +13,7 @@ export function Loader({ progress, onComplete, isLoaded }) {
         <motion.div
             initial={{ opacity: 1 }}
             animate={progress >= 100 ? { opacity: 0, pointerEvents: 'none' } : {}}
-            transition={{ duration: 1.0 }}
+            transition={{ duration: 0.4 }}
             onAnimationComplete={onComplete}
             style={{
                 position: 'fixed',

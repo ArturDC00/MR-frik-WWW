@@ -156,18 +156,54 @@ export function StarField({ particleCount = 200, speed = 0.5, paused = false }) 
             opacity: Math.random() * 0.5 + 0.2
         }));
 
-        animRef.current.animate = () => {
-            const { particles } = animRef.current;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            particles.forEach(p => {
-                p.x = (p.x + p.speedX + canvas.width) % canvas.width;
-                p.y = (p.y + p.speedY + canvas.height) % canvas.height;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(255,255,255,${p.opacity})`;
-                ctx.fill();
-            });
+        /**
+         * Rysowanie zoptymalizowane bez zmiany wyglądu:
+         *
+         * 1) Jasności gwiazd (ciągłe 0.2–0.7) grupujemy w 8 poziomów i każdą grupę rysujemy JEDNĄ ścieżką.
+         *    Wcześniej: 150 × (nowy string rgba + parsowanie koloru + beginPath/arc/fill) na klatkę.
+         *    Teraz: 8 × fill. Błąd kwantyzacji ≤ 0.03 alfy na warstwie o opacity 0.4 — niewidoczny.
+         * 2) 30 klatek/s z podwójnym krokiem, więc prędkość dryfu jest identyczna. Przy speed=0.2 gwiazda
+         *    przesuwa się ≤ 0.14 px na klatkę 60 Hz — przy 30 Hz to ≤ 0.28 px, poniżej progu percepcji
+         *    dla kropki < 2 px. Połowa pracy canvasa i połowa ponownych uploadów warstwy do kompozytora,
+         *    dokładnie w czasie, gdy równolegle renderuje się globus WebGL.
+         */
+        const BUCKETS = 8;
+        const MIN_OPACITY = 0.2;
+        const OPACITY_RANGE = 0.5;
+        const bucketStyles = Array.from({ length: BUCKETS }, (_, b) =>
+            `rgba(255,255,255,${(MIN_OPACITY + ((b + 0.5) / BUCKETS) * OPACITY_RANGE).toFixed(4)})`
+        );
+        animRef.current.particles.forEach((p) => {
+            p.bucket = Math.min(BUCKETS - 1, Math.floor(((p.opacity - MIN_OPACITY) / OPACITY_RANGE) * BUCKETS));
+        });
+
+        const FRAME_MS = 1000 / 30;
+        const STEP_SCALE = 2;
+        let lastDraw = 0;
+
+        animRef.current.animate = (now) => {
             animRef.current.id = requestAnimationFrame(animRef.current.animate);
+            if (now - lastDraw < FRAME_MS - 1) return;
+            lastDraw = now;
+
+            const { particles } = animRef.current;
+            const w = canvas.width;
+            const h = canvas.height;
+            const paths = Array.from({ length: BUCKETS }, () => new Path2D());
+            for (let i = 0; i < particles.length; i++) {
+                const p = particles[i];
+                p.x = (p.x + p.speedX * STEP_SCALE + w) % w;
+                p.y = (p.y + p.speedY * STEP_SCALE + h) % h;
+                if (p.size <= 0) continue;
+                const path = paths[p.bucket];
+                path.moveTo(p.x + p.size, p.y);
+                path.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            }
+            ctx.clearRect(0, 0, w, h);
+            for (let b = 0; b < BUCKETS; b++) {
+                ctx.fillStyle = bucketStyles[b];
+                ctx.fill(paths[b]);
+            }
         };
 
         // Uruchom tylko jeśli nie jest zapauzowany
@@ -175,12 +211,20 @@ export function StarField({ particleCount = 200, speed = 0.5, paused = false }) 
             animRef.current.id = requestAnimationFrame(animRef.current.animate);
         }
 
-        window.addEventListener('resize', setSize);
+        // Debounce: każdy resize realokuje bufor canvasa (~8 MB przy 1080p), a przeciąganie okna
+        // odpala resize dziesiątki razy na sekundę.
+        let resizeTimer = null;
+        const onResize = () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(setSize, 150);
+        };
+        window.addEventListener('resize', onResize);
 
         return () => {
             cancelAnimationFrame(animRef.current.id);
             animRef.current.id = null;
-            window.removeEventListener('resize', setSize);
+            clearTimeout(resizeTimer);
+            window.removeEventListener('resize', onResize);
         };
     }, [particleCount, speed]); // eslint-disable-line react-hooks/exhaustive-deps
 

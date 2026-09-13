@@ -1,12 +1,45 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
-import { Preload, OrbitControls } from '@react-three/drei';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import { COLORS } from '../../constants/colors';
 import { ElegantGlobe } from './ElegantGlobe';
 import { CameraController } from './CameraController';
+
+/**
+ * Ciągłość czasu animacji przy zmianie `frameloop`.
+ *
+ * R3F przy KAŻDEJ zmianie trybu pętli (setFrameloop w @react-three/fiber) robi
+ * `clock.stop(); clock.elapsedTime = 0; clock.start()` — zeruje zegar. Sześć animacji globusa
+ * liczy się z `state.clock.elapsedTime`: statki (ElegantGlobe), trasy (AnimatedRoutes),
+ * pulsowanie portów (PortMarker ×2) i cztery uniformy uTime shaderów. Scroll w dół za 0.68
+ * przełączał pętlę na 'demand', powrót na hero z powrotem na 'always' — i za każdym razem
+ * wszystko wracało do t=0: statki skakały na początek tras, shadery i pulsy resetowały fazę.
+ *
+ * Zamiast walczyć z kolejnością efektów (kiedy dokładnie R3F zeruje zegar względem naszego
+ * commitu), naprawiamy to w pętli: pamiętamy ostatni czas i jeśli w kolejnej klatce zegar
+ * poszedł WSTECZ, to znaczy, że R3F go wyzerował — odtwarzamy ostatnią wartość + bieżącą deltę.
+ *
+ * Kolejność: R3F woła getDelta() (dodaje deltę do elapsedTime) PRZED subskrybentami useFrame,
+ * a subskrybenci o tym samym priorytecie lecą w kolejności montowania. Ten komponent jest
+ * pierwszym dzieckiem Canvas, więc naprawia zegar, zanim przeczyta go ktokolwiek inny —
+ * żadna animacja nie widzi nawet jednej klatki z wyzerowanym czasem.
+ */
+function ClockContinuity() {
+    const lastElapsed = useRef(null);
+
+    useFrame((state, delta) => {
+        const clock = state.clock;
+        if (lastElapsed.current !== null && clock.elapsedTime < lastElapsed.current) {
+            clock.elapsedTime = lastElapsed.current + delta;
+        }
+        lastElapsed.current = clock.elapsedTime;
+    });
+
+    return null;
+}
 
 /** Po zamknięciu panelu kraju — kilka invalidate pod rząd, żeby damping OrbitControls odrysował się przy frameloop `demand`. */
 function InvalidateAfterFocusClear({ focusPoint }) {
@@ -58,22 +91,39 @@ const StableOrbitControls = React.memo(function StableOrbitControls({
  * interakcję i tak odcina pointerEvents na kontenerze globusa w App.
  */
 
+/** Stałe propsy Canvas — poza komponentem, żeby rzadkie re-rendery nie podawały nowych obiektów. */
+const CANVAS_STYLE = { touchAction: 'none' };
+const CANVAS_CAMERA = { position: [0, 15, 80], fov: 42 };
+/**
+ * antialias: false na KAŻDYM tierze. MID/HIGH rysują scenę do render targetu EffectComposera
+ * (multisampling={0}), a do domyślnego framebuffera trafia tylko pełnoekranowy trójkąt z efektem
+ * końcowym — MSAA domyślnego bufora wygładzałby wyłącznie krawędzie tego trójkąta, czyli nic.
+ * Był to więc 4x wielopróbkowany bufor pełnej rozdzielczości alokowany i rozwiązywany co klatkę
+ * na darmo. LOW (bez composera) i tak miał antialias: false. Obraz identyczny.
+ */
+const CANVAS_GL = { antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: false };
+const DPR_LOW = [0.75, 1];
+const DPR_MID = [1, 1.25];
+const DPR_HIGH = [1, 1.5];
+
 /**
  * Cały drzewo R3F — ładowane osobnym chunkiem (next/dynamic w App.jsx).
+ *
+ * React.memo: App przerenderowuje się z powodów niezwiązanych ze sceną (loader, zmiana kraju pod
+ * kursorem, progi scrolla). Wszystkie propsy są prymitywami albo stabilnymi referencjami, więc memo
+ * pomija wtedy rekoncyliację całej sceny i `root.configure()` R3F.
  */
-export default function WebGLCanvas({
+function WebGLCanvas({
     perfTier,
     isLowPerf,
     isHighPerf,
-    scrollProgress,
+    globeIdle,
     introDone,
     isLoaded,
     focusPoint,
     onIntroComplete,
     onGlobeEvent,
     onOrbitInteractionEnd,
-    activeGeometry,
-    hoverGeometry,
     globeRotation,
     globeAutoSpinPaused,
     hasHoverGeometry,
@@ -85,27 +135,48 @@ export default function WebGLCanvas({
 
     const orbitRotateSpeed = isLowPerf ? 0.65 : 0.5;
 
-    /** `demand` dopiero gdy globus jest mocno zjedzony scrollem — płynniejszy orbit w widocznym hero (Lighthouse vs UX). */
-    const frameMode = scrollProgress < 0.68 ? 'always' : 'demand';
+    // true, gdy kamera leci do kraju albo wraca do widoku ogólnego — OrbitControls są wtedy wyłączone,
+    // żeby nie przejmowały kamery w połowie animacji. Zmienia się tylko przy przejściach stanu kamery.
+    const [cameraBusy, setCameraBusy] = useState(false);
+
+    const handleHover = useCallback(
+        (point, rot, e) => onGlobeEvent('HOVER', { point, rot, event: e }),
+        [onGlobeEvent],
+    );
+
+    /**
+     * Tryb pętli renderowania:
+     *
+     * - przed `isLoaded` → 'demand'. Nieprzezroczysty loader zasłania wtedy wszystko, a kontener
+     *   globusa ma opacity 0 — wcześniej scena z Bloom (~17 pełnoekranowych przejść) renderowała się
+     *   w tym czasie 60x/s zupełnie niewidocznie, zabierając GPU i główny wątek loaderowi.
+     *   CameraController w stanie INIT tylko ustawia kamerę na starcie, więc jedna klatka wystarcza.
+     *   Przejście na 'always' wznawia pętlę: każda zmiana stanu R3F wywołuje invalidate().
+     * - w trakcie intro → 'always', niezależnie od scrolla. ⚠️ Krytyczne: intro kamery jedzie na
+     *   useFrame, a przy 'demand' fiber nie woła subskrybentów. Bez tego przescrollowanie przed końcem
+     *   intro zamrażało kamerę — `introDone` nigdy nie odpalało i strona zostawała czarna.
+     * - po intro → 'demand' dopiero gdy globus jest mocno zjedzony scrollem (`globeIdle`, >= 0.68).
+     */
+    const frameMode = !isLoaded ? 'demand' : !introDone || !globeIdle ? 'always' : 'demand';
+
+    const dpr = isLowPerf ? DPR_LOW : isHighPerf ? DPR_HIGH : DPR_MID;
 
     return (
         <Canvas
-            style={{ touchAction: 'none' }}
-            dpr={isLowPerf ? [0.75, 1] : isHighPerf ? [1, 1.5] : [1, 1.25]}
+            style={CANVAS_STYLE}
+            dpr={dpr}
             frameloop={frameMode}
-            gl={{
-                antialias: !isLowPerf,
-                powerPreference: 'high-performance',
-                preserveDrawingBuffer: false,
-            }}
-            camera={{ position: [0, 15, 80], fov: 42 }}
+            gl={CANVAS_GL}
+            camera={CANVAS_CAMERA}
         >
+            <ClockContinuity />
             <InvalidateAfterFocusClear focusPoint={focusPoint} />
 
             <CameraController
                 isLoaded={isLoaded}
                 target={focusPoint}
                 onIntroComplete={onIntroComplete}
+                onBusyChange={setCameraBusy}
                 perfTier={perfTier}
             />
 
@@ -128,9 +199,8 @@ export default function WebGLCanvas({
             <ElegantGlobe
                 perfTier={perfTier}
                 onSelect={onGlobeEvent}
-                onHover={(point, rot, e) => onGlobeEvent('HOVER', { point, rot, event: e })}
-                activeGeometry={activeGeometry}
-                hoverGeometry={hoverGeometry}
+                onHover={handleHover}
+                hasActiveGeometry={hasActiveGeometry}
                 globeRotation={globeRotation}
                 isIntroDone={introDone}
                 pauseAutoRotate={pauseAutoRotate}
@@ -139,14 +209,16 @@ export default function WebGLCanvas({
 
             {introDone && (
                 <StableOrbitControls
-                    enabled={!focusPoint}
+                    enabled={!focusPoint && !cameraBusy}
                     onEnd={onOrbitInteractionEnd}
                     rotateSpeed={orbitRotateSpeed}
                 />
             )}
 
+            {/* enabled={isLoaded}: przy false composer oddaje rysowanie zwykłemu renderowi R3F
+                (priorytet useFrame spada do 0), więc Bloom nie liczy się pod loaderem. */}
             {!isLowPerf && (
-                <EffectComposer disableNormalPass multisampling={0}>
+                <EffectComposer enabled={isLoaded} disableNormalPass multisampling={0}>
                     <Bloom
                         luminanceThreshold={0.1}
                         mipmapBlur
@@ -156,7 +228,11 @@ export default function WebGLCanvas({
                 </EffectComposer>
             )}
 
-            <Preload all />
+            {/* Bez <Preload all />: renderował całą scenę 6 razy (kamera sześcienna) przy montażu,
+                gdy geojson jeszcze nie był pobrany, a trasy, statki i porty nie istniały — nie
+                kompilował więc żadnego z materiałów, dla których go dodano. */}
         </Canvas>
     );
 }
+
+export default React.memo(WebGLCanvas);

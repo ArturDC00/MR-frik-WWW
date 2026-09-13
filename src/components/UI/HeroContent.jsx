@@ -7,13 +7,47 @@ import { LOGO_PATH } from '../../constants/config';
  * Hero: logo + nagłówek dostępne od pierwszego renderu (nie czekają na intro 3D).
  * CTA i podpowiedzi globusa — po zakończeniu intro (introDone).
  */
-export function HeroContent({ scrollProgress, isGlobeInteracting, introDone }) {
-    const [deviceType, setDeviceType] = useState(() => {
-        if (typeof window === 'undefined') return 'DESKTOP';
-        if (window.innerWidth < 768) return 'MOBILE';
-        if (window.innerWidth < 1024) return 'TABLET';
-        return 'DESKTOP';
-    });
+/**
+ * Rozmiary logo i typografii hero są w CSS (media query 767px), NIE w JS.
+ *
+ * Powód: hero renderuje się teraz na serwerze. Gdyby rozmiary zależały od `deviceType`
+ * (czyli od window.innerWidth), serwer wysłałby wariant desktopowy, a telefon podmieniłby go
+ * dopiero przy hydratacji — logo skakałoby z 240×170 na 180×128, i to na elemencie, który jest
+ * kandydatem na LCP. Wartości poniżej są 1:1 tym, co renderował dotychczasowy JS na każdym
+ * breakpoincie. `deviceType` został tylko dla CTA i podpowiedzi scrolla — oba są bramkowane
+ * na `introDone`, więc pojawiają się sekundy później i nie mogą wywołać mismatchu.
+ */
+const HERO_CSS = `
+.hero-logo-wrap { position: absolute; top: 24px; left: 32px; pointer-events: none; z-index: 20; }
+.hero-logo { width: 240px; height: auto; object-fit: contain; object-position: left center; }
+.hero-title {
+    font-family: 'Monument Extended', sans-serif;
+    font-size: clamp(48px, 5vw, 82px);
+    line-height: 1.2; font-weight: 800; color: #F5F5F5;
+    margin: 0 auto; padding: 0; max-width: 90%;
+    background: linear-gradient(135deg, #FFFFFF 0%, rgba(255,255,255,0.8) 100%);
+    background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    text-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+.hero-subtitle {
+    font-family: 'Inter', sans-serif;
+    font-size: clamp(18px, 2vw, 24px);
+    line-height: 1.6; font-weight: 400; color: rgba(255,255,255,0.85);
+    margin: 24px auto 0; padding: 0; max-width: 600px;
+}
+@media (max-width: 767px) {
+    .hero-logo-wrap { top: 16px; left: 16px; }
+    .hero-logo { width: 180px; }
+    .hero-title { font-size: clamp(32px, 8vw, 48px); }
+    .hero-subtitle { font-size: clamp(16px, 4vw, 20px); }
+}
+`;
+
+/** `hideHero` = strona przewinięta za 15% ekranu (próg liczony w App, bez re-renderu na każdy tick). */
+export function HeroContent({ hideHero, isGlobeInteracting, introDone }) {
+    // Startuje na 'DESKTOP' i na serwerze, i przy pierwszym renderze klienta — zero mismatchu.
+    // Realną wartość ustawia efekt poniżej; dotyczy wyłącznie CTA i podpowiedzi scrolla.
+    const [deviceType, setDeviceType] = useState('DESKTOP');
 
     useEffect(() => {
         const handleResize = () => {
@@ -21,6 +55,10 @@ export function HeroContent({ scrollProgress, isGlobeInteracting, introDone }) {
             else if (window.innerWidth < 1024) setDeviceType('TABLET');
             else setDeviceType('DESKTOP');
         };
+
+        // Ustaw realny typ od razu po hydratacji — bez tego telefon zostawał na 'DESKTOP' aż do
+        // pierwszego resize (CTA w rozmiarach desktopowych i desktopowa podpowiedź zamiast strzałki).
+        handleResize();
 
         window.addEventListener('resize', handleResize);
         window.addEventListener('orientationchange', handleResize);
@@ -31,34 +69,7 @@ export function HeroContent({ scrollProgress, isGlobeInteracting, introDone }) {
         };
     }, []);
 
-    const shouldHide = scrollProgress > 0.15 || isGlobeInteracting;
-
-    const titleStyles = {
-        fontFamily: 'Monument Extended, sans-serif',
-        fontSize: deviceType === 'MOBILE' ? 'clamp(32px, 8vw, 48px)' : 'clamp(48px, 5vw, 82px)',
-        lineHeight: '1.2',
-        fontWeight: '800',
-        color: '#F5F5F5',
-        margin: '0 auto',
-        padding: '0',
-        maxWidth: '90%',
-        background: 'linear-gradient(135deg, #FFFFFF 0%, rgba(255,255,255,0.8) 100%)',
-        backgroundClip: 'text',
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-        textShadow: '0 4px 20px rgba(0,0,0,0.3)',
-    };
-
-    const subtitleStyles = {
-        fontFamily: 'Inter, sans-serif',
-        fontSize: deviceType === 'MOBILE' ? 'clamp(16px, 4vw, 20px)' : 'clamp(18px, 2vw, 24px)',
-        lineHeight: '1.6',
-        fontWeight: '400',
-        color: 'rgba(255, 255, 255, 0.85)',
-        margin: '24px auto 0',
-        padding: '0',
-        maxWidth: '600px',
-    };
+    const shouldHide = hideHero || isGlobeInteracting;
 
     return (
         <div
@@ -75,24 +86,25 @@ export function HeroContent({ scrollProgress, isGlobeInteracting, introDone }) {
                 pointerEvents: 'none',
             }}
         >
-            {/* Logo — statyczny, od razu (LCP): bez opóźnień motion */}
-            <div
-                style={{
-                    position: 'absolute',
-                    top: deviceType === 'MOBILE' ? '16px' : '24px',
-                    left: deviceType === 'MOBILE' ? '16px' : '32px',
-                    pointerEvents: 'none',
-                    zIndex: 20,
-                }}
-            >
+            <style>{HERO_CSS}</style>
+
+            {/* Logo — statyczny, od razu (LCP): bez opóźnień motion.
+                width/height dają stały aspect-ratio, CSS ustala szerokość na breakpoint —
+                dzięki temu nie ma przeskoku po hydratacji. */}
+            <div className="hero-logo-wrap">
                 <Image
                     src={LOGO_PATH}
                     alt="MrFrik — Import samochodów z USA i Kanady"
-                    width={deviceType === 'MOBILE' ? 180 : 240}
-                    height={deviceType === 'MOBILE' ? 128 : 170}
-                    sizes="(max-width: 767px) 180px, 240px"
-                    style={{ objectFit: 'contain', objectPosition: 'left center' }}
+                    width={240}
+                    height={170}
+                    className="hero-logo"
                     priority
+                    /* unoptimized: preload w layout.jsx wskazuje surowy PNG, a next/image
+                       pytałby o /_next/image?url=... — preload leciał więc w próżnię (6,5 KB
+                       zmarnowane na krytycznej ścieżce). Źródło ma 560×396 i 6 507 B, czyli
+                       MNIEJ niż generowany z niego AVIF (7 066 B), a render to 180-240 px.
+                       Efekt: jedno żądanie, trafiony preload, zero transformacji sharp na VPS. */
+                    unoptimized
                 />
             </div>
 
@@ -110,8 +122,8 @@ export function HeroContent({ scrollProgress, isGlobeInteracting, introDone }) {
                             padding: '0 20px',
                         }}
                     >
-                        <h1 style={titleStyles}>Import aut z USA i Kanady</h1>
-                        <p style={subtitleStyles}>
+                        <h1 className="hero-title">Import aut z USA i Kanady</h1>
+                        <p className="hero-subtitle">
                             Oszczędź nawet 40% w porównaniu do cen europejskich
                         </p>
 

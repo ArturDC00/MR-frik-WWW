@@ -58,8 +58,13 @@ export function CookieConsent() {
                     style={{
                         position: 'fixed',
                         bottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
+                        // Centrowanie BEZ transform. Wcześniej było `left: 50%` + `translateX(-50%)`,
+                        // ale framer-motion animuje wjazd przez `y` i nadpisuje cały `transform` —
+                        // przesunięcie -50% ginęło, banner zaczynał się w połowie ekranu, a na telefonie
+                        // „Tylko niezbędne” (a na iPhonie SE nawet „Akceptuj”) lądowało poza ekranem.
+                        left: 0,
+                        right: 0,
+                        marginInline: 'auto',
                         zIndex: 10080,
                         width: 'min(640px, calc(100vw - 24px))',
                         maxHeight: 'min(78dvh, calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px))',
@@ -71,14 +76,16 @@ export function CookieConsent() {
                         WebkitBackdropFilter: 'blur(24px)',
                         border: '1px solid rgba(253, 151, 49, 0.25)',
                         borderRadius: '16px',
-                        padding: '20px 24px',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '14px',
                         boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
                     }}
                 >
                     <style>{`
+                        .cc-dialog-root {
+                            padding: 20px 24px;
+                            gap: 14px;
+                        }
                         .cc-row {
                             display: flex;
                             align-items: center;
@@ -136,6 +143,24 @@ export function CookieConsent() {
                         .cc-btn-decline:hover {
                             border-color: rgba(255,255,255,0.3);
                             color: rgba(245,245,245,0.8);
+                        }
+                        /* Telefony: przyciski jeden pod drugim na całą szerokość — obok siebie
+                           „Akceptuj wszystkie” łamało się w dwie linie albo spychało drugi przycisk. */
+                        @media (max-width: 480px) {
+                            .cc-dialog-root {
+                                padding: 16px;
+                                gap: 12px;
+                            }
+                            .cc-actions {
+                                flex-direction: column;
+                                gap: 8px;
+                            }
+                            .cc-btn-accept,
+                            .cc-btn-decline {
+                                flex: none;
+                                width: 100%;
+                                min-width: 0;
+                            }
                         }
                     `}</style>
 
